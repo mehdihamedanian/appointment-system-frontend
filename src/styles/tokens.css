@@ -1,0 +1,111 @@
+:root {
+  color-scheme: light;
+
+  --color-primary: #0e9a93;
+  --color-primary-hover: #0b827c;
+  --color-primary-active: #096e69;
+  --color-primary-foreground: #ffffff;
+  --color-primary-subtle: #e6f6f5;
+  --color-primary-muted: #b7e2df;
+
+  --color-bg: #f3f6f7;
+  --color-bg-subtle: #e8eef0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7fafb;
+  --color-surface-sunken: #edf2f3;
+
+  --color-text: #17313a;
+  --color-text-muted: #5b7178;
+  --color-text-subtle: #83949a;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #dce6e8;
+  --color-border-strong: #c4d3d6;
+  --color-focus: #0e9a93;
+  --color-focus-ring: rgb(14 154 147 / 28%);
+
+  --color-success: #1b8a5f;
+  --color-success-subtle: #e7f6ee;
+  --color-warning: #b7791f;
+  --color-warning-subtle: #fbf3e3;
+  --color-danger: #c44545;
+  --color-danger-subtle: #fbeaea;
+  --color-info: #2b7c9a;
+  --color-info-subtle: #e7f3f8;
+
+  --color-status-scheduled: #2b7c9a;
+  --color-status-scheduled-subtle: #e7f3f8;
+  --color-status-confirmed: #0e9a93;
+  --color-status-confirmed-subtle: #e6f6f5;
+  --color-status-completed: #1b8a5f;
+  --color-status-completed-subtle: #e7f6ee;
+  --color-status-cancelled: #c44545;
+  --color-status-cancelled-subtle: #fbeaea;
+  --color-status-no-show: #8a6a2b;
+  --color-status-no-show-subtle: #f7f0e2;
+
+  --font-sans: var(--font-vazirmatn), Tahoma, "Segoe UI", sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.75rem;
+  --font-size-3xl: 2.125rem;
+  --line-height-tight: 1.35;
+  --line-height-body: 1.8;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  --shadow-xs: 0 1px 2px rgb(23 49 58 / 4%);
+  --shadow-sm: 0 6px 16px rgb(23 49 58 / 6%);
+  --shadow-md: 0 12px 32px rgb(23 49 58 / 8%);
+  --shadow-focus: 0 0 0 4px var(--color-focus-ring);
+
+  --control-height-sm: 2.25rem;
+  --control-height-md: 2.75rem;
+  --control-height-lg: 3.25rem;
+  --touch-target-min: 2.75rem;
+
+  --container-sm: 40rem;
+  --container-md: 56rem;
+  --container-lg: 72rem;
+  --container-xl: 80rem;
+  --sidebar-width: 16.5rem;
+  --sidebar-width-collapsed: 4.75rem;
+  --header-height: 4rem;
+  --bottom-nav-height: 4.5rem;
+
+  --z-base: 1;
+  --z-sticky: 100;
+  --z-dropdown: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-skip-link: 600;
+
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+}

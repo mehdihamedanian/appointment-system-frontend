@@ -1,0 +1,305 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition:
+    background-color var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard),
+    color var(--motion-base) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.btn--secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--color-text);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.btn--danger {
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+}
+
+.btn--sm {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: transparent;
+}
+
+.icon-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.surface-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.route-shell {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.route-shell__eyebrow {
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.route-shell p {
+  color: var(--color-text-muted);
+  max-width: 42rem;
+}
+
+.state-card {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  min-height: 12rem;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+
+.state-card__icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.state-card--danger .state-card__icon {
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+}
+
+.state-card--warning .state-card__icon {
+  background: var(--color-warning-subtle);
+  color: var(--color-warning);
+}
+
+.state-card--success .state-card__icon {
+  background: var(--color-success-subtle);
+  color: var(--color-success);
+}
+
+.state-card p {
+  color: var(--color-text-muted);
+  max-width: 36rem;
+}
+
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-sunken) 0%,
+    var(--color-bg-subtle) 50%,
+    var(--color-surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s var(--ease-standard) infinite;
+  border-radius: var(--radius-md);
+}
+
+.skeleton--title {
+  height: 1.5rem;
+  width: min(16rem, 70%);
+}
+
+.skeleton--line {
+  height: 0.9rem;
+  width: 100%;
+}
+
+.skeleton--line-short {
+  width: 60%;
+}
+
+.skeleton--card {
+  height: 7.5rem;
+}
+
+.page-loading,
+.inline-loading {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.inline-loading {
+  min-height: 4.5rem;
+  align-content: center;
+}
+
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--color-primary-muted);
+  border-block-start-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 0.8s linear infinite;
+}
+
+.toast-viewport {
+  position: fixed;
+  inset-block-end: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  inset-inline-end: var(--space-4);
+  z-index: var(--z-toast);
+  display: grid;
+  gap: var(--space-2);
+  width: min(24rem, calc(100vw - var(--space-8)));
+}
+
+.toast {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+}
+
+.toast--success {
+  border-color: var(--color-success);
+}
+
+.toast--error {
+  border-color: var(--color-danger);
+}
+
+.toast--warning {
+  border-color: var(--color-warning);
+}
+
+.toast--info,
+.toast--loading {
+  border-color: var(--color-info);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(23 49 58 / 42%);
+}
+
+.modal {
+  width: min(var(--modal-width, 32rem), 100%);
+  max-height: min(90vh, 48rem);
+  overflow: auto;
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+.modal--sm {
+  --modal-width: 24rem;
+}
+
+.modal--md {
+  --modal-width: 32rem;
+}
+
+.modal--lg {
+  --modal-width: 44rem;
+}
+
+.modal__title {
+  margin-bottom: var(--space-2);
+}
+
+.modal__description {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin-top: var(--space-6);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html[dir="rtl"] .toast-viewport {
+  inset-inline-end: auto;
+  inset-inline-start: var(--space-4);
+}
