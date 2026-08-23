@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Brand } from "@/components/layout/brand";
 import { AppIcon } from "@/components/ui/app-icon";
 import { IconButton } from "@/components/ui/icon-button";
+import { CustomerNotificationBell } from "@/features/customer/customer-notification-bell";
 import { defaultCapabilities, isCapabilityVisible } from "@/config/capabilities";
 import {
   customerNavItems,
@@ -56,14 +57,8 @@ export function CustomerShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div style={{ display: "flex", gap: "0.25rem" }}>
-          <IconButton
-            className="desktop-only"
-            label="اعلان‌ها"
-            onClick={() => router.push(routes.customer.notifications)}
-          >
-            <Bell size={20} />
-          </IconButton>
+        <div className="customer-header__actions">
+          <CustomerNotificationBell />
           <IconButton label="خروج از حساب" onClick={() => void onLogout()}>
             <LogOut size={20} />
           </IconButton>

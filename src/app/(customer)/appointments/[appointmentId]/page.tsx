@@ -1,4 +1,4 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AppointmentDetailScreen } from "@/features/customer/appointment-detail-screen";
 
 type AppointmentDetailPageProps = {
   params: Promise<{ appointmentId: string }>;
@@ -14,11 +14,5 @@ export default async function AppointmentDetailPage({
 }: AppointmentDetailPageProps) {
   const { appointmentId } = await params;
 
-  return (
-    <RouteShell
-      title="جزئیات نوبت"
-      identity={appointmentId}
-      description="جزئیات نوبت، وضعیت و اقدامات مرتبط در مرحله بعد پیاده‌سازی می‌شود."
-    />
-  );
+  return <AppointmentDetailScreen reference={appointmentId} />;
 }

@@ -51,6 +51,10 @@ function readUser(value: unknown): SessionUser | null {
       readString(source.name),
     email: readString(source.email),
     phone: readString(source.phone) ?? readString(source.mobile),
+    jobTitle:
+      readString(source.jobTitle) ??
+      readString(source.title) ??
+      readString(source.roleLabel),
     permissionCodes: (() => {
       const explicit = readPermissionCodes(source.permissionCodes);
       return explicit.length > 0
@@ -61,6 +65,10 @@ function readUser(value: unknown): SessionUser | null {
       source.adminPanelAccess ?? source.canAccessAdmin,
     ),
   };
+}
+
+export function adaptSessionUser(value: unknown): SessionUser | null {
+  return readUser(value);
 }
 
 export function adaptSessionPayload(payload: unknown): ResolvedSession {

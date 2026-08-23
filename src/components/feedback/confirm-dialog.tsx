@@ -9,7 +9,7 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: "danger" | "primary";
+  variant?: "danger" | "primary" | "destructive";
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -21,11 +21,13 @@ export function ConfirmDialog({
   description,
   confirmLabel = "تأیید",
   cancelLabel = "انصراف",
-  variant = "danger",
+  variant = "destructive",
   busy = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const tone = variant === "primary" ? "primary" : "destructive";
+
   return (
     <Modal
       open={open}
@@ -33,20 +35,22 @@ export function ConfirmDialog({
       description={description}
       size="sm"
       preventClose={busy}
+      showClose={!busy}
       onClose={onCancel}
-    >
-      <div className="modal__actions">
-        <Button variant="secondary" onClick={onCancel} disabled={busy}>
-          {cancelLabel}
-        </Button>
-        <Button
-          variant={variant === "danger" ? "danger" : "primary"}
-          onClick={onConfirm}
-          disabled={busy}
-        >
-          {confirmLabel}
-        </Button>
-      </div>
-    </Modal>
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel} disabled={busy}>
+            {cancelLabel}
+          </Button>
+          <Button
+            variant={tone}
+            loading={busy}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    />
   );
 }

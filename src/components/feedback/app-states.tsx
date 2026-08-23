@@ -33,15 +33,29 @@ function StateCard({
 export function EmptyState({
   title = "موردی برای نمایش نیست",
   description = "وقتی داده‌ای ثبت شود، اینجا نمایش داده می‌شود.",
+  action,
+  secondaryAction,
+  icon,
 }: {
   title?: string;
   description?: string;
+  action?: ReactNode;
+  secondaryAction?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <StateCard
       title={title}
       description={description}
-      icon={<Inbox size={20} aria-hidden="true" />}
+      icon={icon ?? <Inbox size={20} aria-hidden="true" />}
+      action={
+        action || secondaryAction ? (
+          <div className="ds-inline">
+            {action}
+            {secondaryAction}
+          </div>
+        ) : null
+      }
     />
   );
 }
@@ -49,15 +63,27 @@ export function EmptyState({
 export function NoResultsState({
   title = "نتیجه‌ای پیدا نشد",
   description = "عبارت یا فیلتر دیگری را امتحان کنید.",
+  action,
+  secondaryAction,
 }: {
   title?: string;
   description?: string;
+  action?: ReactNode;
+  secondaryAction?: ReactNode;
 }) {
   return (
     <StateCard
       title={title}
       description={description}
       icon={<SearchX size={20} aria-hidden="true" />}
+      action={
+        action || secondaryAction ? (
+          <div className="ds-inline">
+            {action}
+            {secondaryAction}
+          </div>
+        ) : null
+      }
     />
   );
 }
@@ -66,10 +92,12 @@ export function ApiErrorState({
   title = "دریافت اطلاعات ممکن نشد",
   description = "لطفاً اتصال خود را بررسی کنید و دوباره تلاش کنید.",
   onRetry,
+  requestId,
 }: {
   title?: string;
   description?: string;
   onRetry?: () => void;
+  requestId?: string;
 }) {
   return (
     <StateCard
@@ -78,11 +106,18 @@ export function ApiErrorState({
       description={description}
       icon={<WifiOff size={20} aria-hidden="true" />}
       action={
-        onRetry ? (
-          <Button variant="secondary" onClick={onRetry}>
-            تلاش دوباره
-          </Button>
-        ) : null
+        <>
+          {requestId ? (
+            <p className="text-caption">
+              شناسه درخواست: <span className="ltr-value">{requestId}</span>
+            </p>
+          ) : null}
+          {onRetry ? (
+            <Button variant="secondary" onClick={onRetry}>
+              تلاش دوباره
+            </Button>
+          ) : null}
+        </>
       }
     />
   );
@@ -91,9 +126,11 @@ export function ApiErrorState({
 export function PermissionDeniedState({
   title = "دسترسی مجاز نیست",
   description = "برای مشاهده این بخش مجوز لازم را ندارید.",
+  action,
 }: {
   title?: string;
   description?: string;
+  action?: ReactNode;
 }) {
   return (
     <StateCard
@@ -101,6 +138,7 @@ export function PermissionDeniedState({
       title={title}
       description={description}
       icon={<ShieldOff size={20} aria-hidden="true" />}
+      action={action}
     />
   );
 }
@@ -175,3 +213,5 @@ export function SuccessState({
     />
   );
 }
+
+export const ErrorState = ApiErrorState;

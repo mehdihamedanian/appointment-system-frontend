@@ -19,14 +19,10 @@ describe("modal accessibility", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "عنوان مودال" });
-    const action = screen.getByRole("button", { name: "اقدام" });
-
     expect(dialog).toBeInTheDocument();
     expect(document.body.contains(dialog)).toBe(true);
     expect(
-      focusSpy.mock.instances.some(
-        (element) => element === dialog || element === action,
-      ),
+      focusSpy.mock.instances.some((element) => dialog.contains(element as Node)),
     ).toBe(true);
 
     await user.keyboard("{Escape}");

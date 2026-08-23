@@ -9,9 +9,10 @@ import {
 } from "@/test/render";
 
 const replace = vi.fn();
+const navigation = { pathname: "/dashboard" };
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard",
+  usePathname: () => navigation.pathname,
   useRouter: () => ({ replace, push: replace }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -19,6 +20,7 @@ vi.mock("next/navigation", () => ({
 describe("route guards", () => {
   beforeEach(() => {
     replace.mockReset();
+    navigation.pathname = "/dashboard";
   });
 
   it("redirects unauthenticated customers to login with a safe return path", async () => {
@@ -40,7 +42,27 @@ describe("route guards", () => {
     expect(screen.queryByText("محافظت‌شده")).not.toBeInTheDocument();
   });
 
+  it("redirects unauthenticated admin visitors to admin login", async () => {
+    navigation.pathname = "/admin";
+    renderWithProviders(
+      <AdminGuard>
+        <p>پنل مدیریت</p>
+      </AdminGuard>,
+      {
+        session: createSessionValue({
+          status: "unauthenticated",
+          user: null,
+        }),
+      },
+    );
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/admin/login?redirect=%2Fadmin");
+    });
+  });
+
   it("shows a branded 403 when admin access is denied", () => {
+    navigation.pathname = "/admin";
     renderWithProviders(
       <AdminGuard>
         <p>پنل مدیریت</p>
@@ -56,7 +78,44 @@ describe("route guards", () => {
     expect(screen.queryByText("پنل مدیریت")).not.toBeInTheDocument();
   });
 
+  it("keeps protected customer content hidden while the session is restored", () => {
+    renderWithProviders(
+      <CustomerGuard>
+        <p>محافظت‌شده</p>
+      </CustomerGuard>,
+      {
+        session: createSessionValue({
+          status: "loading",
+          user: null,
+        }),
+      },
+    );
+
+    expect(screen.queryByText("محافظت‌شده")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("در حال بررسی دسترسی")).toBeInTheDocument();
+  });
+
+  it("redirects expired sessions to the dedicated expired page", async () => {
+    renderWithProviders(
+      <CustomerGuard>
+        <p>محافظت‌شده</p>
+      </CustomerGuard>,
+      {
+        session: createSessionValue({
+          status: "expired",
+          user: null,
+        }),
+      },
+    );
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/session-expired?redirect=%2Fdashboard");
+    });
+    expect(screen.queryByText("محافظت‌شده")).not.toBeInTheDocument();
+  });
+
   it("allows granted admin access", () => {
+    navigation.pathname = "/admin";
     renderWithProviders(
       <AdminGuard>
         <p>پنل مدیریت</p>
@@ -72,6 +131,7 @@ describe("route guards", () => {
   });
 
   it("redirects authenticated visitors away from anonymous auth routes", async () => {
+    navigation.pathname = "/login";
     renderWithProviders(
       <GuestGuard>
         <p>ورود</p>

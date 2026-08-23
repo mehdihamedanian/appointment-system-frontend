@@ -1,15 +1,21 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { Brand } from "@/components/layout/brand";
 import { env } from "@/config/env";
-import type { ReactNode } from "react";
+import { routes } from "@/constants/routes";
 
 export function AuthShell({
   title,
   description,
+  alert,
   children,
+  footer,
 }: {
   title: string;
-  description: string;
+  description?: string;
+  alert?: ReactNode;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
     <div className="auth-shell">
@@ -17,10 +23,14 @@ export function AuthShell({
         <header>
           <Brand compact />
           <h1>{title}</h1>
-          <p>{description}</p>
+          {description ? <p>{description}</p> : null}
         </header>
+        {alert}
         {children}
-        <p className="brand__tagline">{env.appName}</p>
+        {footer}
+        <p className="auth-back">
+          <Link href={routes.public.home}>بازگشت به وب‌سایت {env.appName}</Link>
+        </p>
       </section>
     </div>
   );

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHttpError, normalizeNetworkError } from "@/lib/api/errors";
+import {
+  isPublicApiDisconnected,
+  normalizeHttpError,
+  normalizeNetworkError,
+} from "@/lib/api/errors";
 import { adaptSessionPayload } from "@/lib/api/session-adapter";
 
 describe("API error normalization", () => {
@@ -34,6 +38,29 @@ describe("API error normalization", () => {
     expect(error.status).toBe(404);
     expect(error.requestId).toBe("corr-9");
     expect(error.message).toBe("Not found");
+  });
+
+  it("treats missing public API configuration and 404 as disconnected", () => {
+    expect(
+      isPublicApiDisconnected({
+        status: 0,
+        code: "MISSING_API_BASE_URL",
+        message: "آدرس سرویس عمومی پیکربندی نشده است.",
+      }),
+    ).toBe(true);
+    expect(
+      isPublicApiDisconnected({
+        status: 404,
+        code: "PUBLIC_BUSINESS_UNAVAILABLE",
+        message: "اطلاعات این مجموعه در دسترس نیست.",
+      }),
+    ).toBe(true);
+    expect(
+      isPublicApiDisconnected({
+        status: 500,
+        message: "اختلالی در سرویس رخ داده است. لطفاً دوباره تلاش کنید.",
+      }),
+    ).toBe(false);
   });
 
   it("normalizes abort and timeout errors", () => {

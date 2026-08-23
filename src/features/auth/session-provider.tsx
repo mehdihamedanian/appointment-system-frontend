@@ -23,6 +23,7 @@ type SessionContextValue = {
   user: SessionUser | null;
   message?: string;
   refetch: () => Promise<unknown>;
+  applyAuthenticated: (user: SessionUser) => void;
   logout: () => Promise<void>;
 };
 
@@ -39,9 +40,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const status: SessionStatus = query.isPending ? "loading" : snapshot.status;
 
+  const applyAuthenticated = useCallback(
+    (user: SessionUser) => {
+      queryClient.setQueryData(sessionQueryOptions.queryKey, {
+        status: "authenticated",
+        user,
+      } satisfies ResolvedSession);
+    },
+    [queryClient],
+  );
+
   const logout = useCallback(async () => {
     await logoutRemote();
     clearFrontendCaches(queryClient);
+    queryClient.setQueryData(sessionQueryOptions.queryKey, {
+      status: "unauthenticated",
+      user: null,
+    } satisfies ResolvedSession);
   }, [queryClient]);
 
   useEffect(() => {
@@ -63,9 +78,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       user: snapshot.user,
       message: snapshot.message,
       refetch: query.refetch,
+      applyAuthenticated,
       logout,
     }),
-    [logout, query.refetch, snapshot.message, snapshot.user, status],
+    [applyAuthenticated, logout, query.refetch, snapshot.message, snapshot.user, status],
   );
 
   return (

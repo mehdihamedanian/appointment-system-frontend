@@ -1,7 +1,7 @@
 export function Skeleton({
   variant = "line",
 }: {
-  variant?: "title" | "line" | "line-short" | "card";
+  variant?: "title" | "line" | "line-short" | "card" | "circle" | "rect" | "table-row";
 }) {
   return (
     <span

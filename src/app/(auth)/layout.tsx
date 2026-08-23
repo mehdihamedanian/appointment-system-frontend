@@ -2,6 +2,10 @@ import { Suspense, type ReactNode } from "react";
 import { PageLoading } from "@/components/feedback/loading-states";
 import { GuestGuard } from "@/features/auth/guards";
 
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <main id="main-content" tabIndex={-1}>

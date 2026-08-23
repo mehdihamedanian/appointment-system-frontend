@@ -6,6 +6,9 @@ import {
 } from "@/lib/api/errors";
 import { adaptSessionPayload } from "@/lib/api/session-adapter";
 import { queryKeys } from "@/lib/query/keys";
+import { clearBookingDraft } from "@/lib/booking/persistence";
+import { clearHoldReference } from "@/lib/booking/hold-session";
+import { clearAuthChallenge } from "@/lib/auth/challenge-store";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ResolvedSession } from "@/types/session";
 
@@ -50,6 +53,9 @@ export async function logoutRemote(): Promise<void> {
 }
 
 export function clearFrontendCaches(queryClient: QueryClient): void {
+  clearBookingDraft();
+  clearHoldReference();
+  clearAuthChallenge();
   queryClient.removeQueries({ queryKey: queryKeys.session });
   queryClient.clear();
 }

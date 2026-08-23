@@ -1,14 +1,15 @@
 import { AuthShell } from "@/components/layout/auth-shell";
+import { VerifyOtpForm } from "@/features/auth/verify-otp-form";
 
 export const metadata = { title: "تأیید کد" };
 
 export default function VerifyOtpPage() {
   return (
     <AuthShell
-      title="تأیید کد یک‌بارمصرف"
-      description="ورود کد تأیید در مرحله احراز هویت پیاده‌سازی می‌شود."
+      title="تأیید شماره موبایل"
+      description="کد پیامک‌شده را وارد کنید."
     >
-      <p>کد را در کادر بعدی وارد خواهید کرد.</p>
+      <VerifyOtpForm />
     </AuthShell>
   );
 }

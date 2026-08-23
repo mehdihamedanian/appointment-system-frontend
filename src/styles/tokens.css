@@ -7,17 +7,22 @@
   --color-primary-foreground: #ffffff;
   --color-primary-subtle: #e6f6f5;
   --color-primary-muted: #b7e2df;
+  --color-secondary: #3f5b63;
+  --color-secondary-hover: #334a51;
+  --color-secondary-foreground: #ffffff;
 
   --color-bg: #f3f6f7;
   --color-bg-subtle: #e8eef0;
   --color-surface: #ffffff;
   --color-surface-muted: #f7fafb;
   --color-surface-sunken: #edf2f3;
+  --color-surface-elevated: #ffffff;
 
   --color-text: #17313a;
   --color-text-muted: #5b7178;
   --color-text-subtle: #83949a;
   --color-text-inverse: #ffffff;
+  --color-text-disabled: #9aabaf;
 
   --color-border: #dce6e8;
   --color-border-strong: #c4d3d6;
@@ -33,18 +38,37 @@
   --color-info: #2b7c9a;
   --color-info-subtle: #e7f3f8;
 
-  --color-status-scheduled: #2b7c9a;
-  --color-status-scheduled-subtle: #e7f3f8;
+  --color-disabled: #cfd8db;
+  --color-disabled-foreground: #8a9ba0;
+  --color-overlay: rgb(23 49 58 / 42%);
+
+  --color-status-pending: #b7791f;
+  --color-status-pending-subtle: #fbf3e3;
   --color-status-confirmed: #0e9a93;
   --color-status-confirmed-subtle: #e6f6f5;
+  --color-status-checked-in: #2b7c9a;
+  --color-status-checked-in-subtle: #e7f3f8;
+  --color-status-in-progress: #3d6ea8;
+  --color-status-in-progress-subtle: #e8f0f8;
   --color-status-completed: #1b8a5f;
   --color-status-completed-subtle: #e7f6ee;
   --color-status-cancelled: #c44545;
   --color-status-cancelled-subtle: #fbeaea;
   --color-status-no-show: #8a6a2b;
   --color-status-no-show-subtle: #f7f0e2;
+  --color-status-pending-payment: #b7791f;
+  --color-status-pending-payment-subtle: #fbf3e3;
+  --color-status-paid: #1b8a5f;
+  --color-status-paid-subtle: #e7f6ee;
+  --color-status-failed: #c44545;
+  --color-status-failed-subtle: #fbeaea;
+  --color-status-refunded: #5b7178;
+  --color-status-refunded-subtle: #eef2f3;
+  --color-status-scheduled: var(--color-status-pending);
+  --color-status-scheduled-subtle: var(--color-status-pending-subtle);
 
   --font-sans: var(--font-vazirmatn), Tahoma, "Segoe UI", sans-serif;
+  --font-numeric: "Segoe UI", Tahoma, var(--font-vazirmatn), sans-serif;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
@@ -76,15 +100,25 @@
   --radius-xl: 24px;
   --radius-full: 999px;
 
+  --border-width: 1px;
+  --border-width-strong: 2px;
+
   --shadow-xs: 0 1px 2px rgb(23 49 58 / 4%);
   --shadow-sm: 0 6px 16px rgb(23 49 58 / 6%);
   --shadow-md: 0 12px 32px rgb(23 49 58 / 8%);
   --shadow-focus: 0 0 0 4px var(--color-focus-ring);
+  --elevation-surface: var(--shadow-xs);
+  --elevation-raised: var(--shadow-sm);
+  --elevation-overlay: var(--shadow-md);
 
   --control-height-sm: 2.25rem;
   --control-height-md: 2.75rem;
   --control-height-lg: 3.25rem;
   --touch-target-min: 2.75rem;
+  --icon-size-sm: 1rem;
+  --icon-size-md: 1.25rem;
+  --icon-size-lg: 1.5rem;
+  --disabled-opacity: 0.55;
 
   --container-sm: 40rem;
   --container-md: 56rem;
@@ -95,12 +129,18 @@
   --header-height: 4rem;
   --bottom-nav-height: 4.5rem;
 
+  --breakpoint-sm: 480px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
   --z-base: 1;
   --z-sticky: 100;
   --z-dropdown: 200;
   --z-overlay: 300;
   --z-modal: 400;
   --z-toast: 500;
+  --z-tooltip: 550;
   --z-skip-link: 600;
 
   --motion-fast: 120ms;
@@ -108,4 +148,9 @@
   --motion-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-end: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-start: env(safe-area-inset-left, 0px);
 }

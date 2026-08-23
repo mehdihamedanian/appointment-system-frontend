@@ -1,6 +1,14 @@
-import { LOGIN_PATH } from "@/constants/routes";
-import { isAnonymousOnlyAuthRoute, isProtectedRoute } from "@/lib/auth/route-access";
-import { getSafeInternalRedirect, withRedirectParam } from "@/lib/auth/safe-redirect";
+import { ADMIN_LOGIN_PATH, LOGIN_PATH } from "@/constants/routes";
+import {
+  isAdminRoute,
+  isAnonymousOnlyAuthRoute,
+  isCustomerRoute,
+} from "@/lib/auth/route-access";
+import {
+  defaultDestination,
+  getSafeInternalRedirect,
+  withRedirectParam,
+} from "@/lib/auth/safe-redirect";
 
 export type ProxyDecision =
   | { type: "next" }
@@ -15,16 +23,32 @@ export function resolveProxyNavigation(input: {
   const { pathname, search = "", redirectParam, hasSessionCookie } = input;
 
   if (hasSessionCookie && isAnonymousOnlyAuthRoute(pathname)) {
+    const audience = pathname.startsWith("/admin") ? "admin" : "customer";
     return {
       type: "redirect",
-      location: getSafeInternalRedirect(redirectParam),
+      location: getSafeInternalRedirect(
+        redirectParam,
+        defaultDestination(audience),
+        audience,
+      ),
     };
   }
 
-  if (!hasSessionCookie && isProtectedRoute(pathname)) {
+  if (!hasSessionCookie && isCustomerRoute(pathname)) {
     return {
       type: "redirect",
-      location: withRedirectParam(LOGIN_PATH, `${pathname}${search}`),
+      location: withRedirectParam(LOGIN_PATH, `${pathname}${search}`, "customer"),
+    };
+  }
+
+  if (!hasSessionCookie && isAdminRoute(pathname)) {
+    return {
+      type: "redirect",
+      location: withRedirectParam(
+        ADMIN_LOGIN_PATH,
+        `${pathname}${search}`,
+        "admin",
+      ),
     };
   }
 

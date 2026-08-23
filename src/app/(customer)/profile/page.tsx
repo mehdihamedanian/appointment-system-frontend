@@ -1,12 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { ProfileOverviewScreen } from "@/features/customer/profile-overview-screen";
 
 export const metadata = { title: "حساب کاربری" };
 
 export default function ProfilePage() {
-  return (
-    <RouteShell
-      title="حساب کاربری"
-      description="ویرایش مشخصات حساب در مرحله بعد به این صفحه اضافه می‌شود."
-    />
-  );
+  return <ProfileOverviewScreen />;
 }

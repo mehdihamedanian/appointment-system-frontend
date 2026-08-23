@@ -1,12 +1,16 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { Suspense } from "react";
+import { PaymentsScreen } from "@/features/customer/payments-screen";
+import { PaymentListSkeleton } from "@/features/customer/payment-list-skeleton";
 
-export const metadata = { title: "پرداخت‌ها" };
+export const metadata = {
+  title: "پرداخت‌ها",
+  robots: { index: false, follow: false },
+};
 
 export default function PaymentsPage() {
   return (
-    <RouteShell
-      title="پرداخت‌ها"
-      description="سوابق پرداخت در صورت فعال بودن این قابلیت از قرارداد Backend خوانده می‌شود."
-    />
+    <Suspense fallback={<PaymentListSkeleton />}>
+      <PaymentsScreen />
+    </Suspense>
   );
 }

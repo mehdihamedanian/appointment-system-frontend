@@ -22,8 +22,17 @@ describe("proxy navigation", () => {
       }),
     ).toEqual({
       type: "redirect",
-      location: "/login?redirect=%2Fadmin%2Fappointments",
+      location: "/admin/login?redirect=%2Fadmin%2Fappointments",
     });
+  });
+
+  it("lets anonymous visitors reach admin login", () => {
+    expect(
+      resolveProxyNavigation({
+        pathname: "/admin/login",
+        hasSessionCookie: false,
+      }),
+    ).toEqual({ type: "next" });
   });
 
   it("keeps authenticated visitors off anonymous auth routes", () => {
@@ -39,12 +48,16 @@ describe("proxy navigation", () => {
     });
   });
 
-  it("does not treat session-expired as an anonymous-only route", () => {
+  it("sends anonymous visitors away from customer appointment lists", () => {
     expect(
       resolveProxyNavigation({
-        pathname: "/session-expired",
+        pathname: "/appointments",
+        search: "?category=upcoming",
         hasSessionCookie: false,
       }),
-    ).toEqual({ type: "next" });
+    ).toEqual({
+      type: "redirect",
+      location: "/login?redirect=%2Fappointments%3Fcategory%3Dupcoming",
+    });
   });
 });

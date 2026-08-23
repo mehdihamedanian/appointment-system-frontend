@@ -1,12 +1,13 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { Suspense } from "react";
+import { PageLoading } from "@/components/feedback/loading-states";
+import { BookingWizard } from "@/features/booking/booking-wizard";
 
 export const metadata = { title: "رزرو نوبت" };
 
 export default function BookingPage() {
   return (
-    <RouteShell
-      title="رزرو نوبت"
-      description="راهنمای چندمرحله‌ای رزرو در فازهای بعد پیاده‌سازی می‌شود."
-    />
+    <Suspense fallback={<PageLoading label="در حال آماده‌سازی رزرو" />}>
+      <BookingWizard />
+    </Suspense>
   );
 }

@@ -27,7 +27,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   async function onLogout() {
     await logout();
-    router.replace(routes.auth.login);
+    router.replace(routes.auth.adminLogin);
   }
 
   const nav = (

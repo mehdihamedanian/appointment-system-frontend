@@ -59,6 +59,26 @@ export function isUnauthorizedError(error: AppApiError): boolean {
   return error.status === 401;
 }
 
+export function isForbiddenError(error: AppApiError): boolean {
+  return error.status === 403;
+}
+
+export function isNotFoundError(error: AppApiError): boolean {
+  return error.status === 404;
+}
+
+export function isPublicApiDisconnected(error: AppApiError): boolean {
+  const code = error.code?.toUpperCase() ?? "";
+  return (
+    code === "MISSING_API_BASE_URL" ||
+    code === "NETWORK_ERROR" ||
+    code === "REQUEST_TIMEOUT" ||
+    code === "PUBLIC_BUSINESS_UNAVAILABLE" ||
+    error.status === 404 ||
+    error.status === 0
+  );
+}
+
 export function isSessionExpiredError(error: AppApiError): boolean {
   if (error.status !== 401) {
     return false;
@@ -72,8 +92,26 @@ export function isSessionExpiredError(error: AppApiError): boolean {
   );
 }
 
+export function isConflictError(error: AppApiError): boolean {
+  if (error.status === 409) {
+    return true;
+  }
+  const code = error.code?.toUpperCase() ?? "";
+  return (
+    code.includes("SLOT") ||
+    code.includes("CONFLICT") ||
+    code.includes("TAKEN") ||
+    code.includes("UNAVAILABLE")
+  );
+}
+
 export function isValidationError(error: AppApiError): boolean {
   return error.status === 422 || Boolean(error.fieldErrors);
+}
+
+export function isNetworkUncertaintyError(error: AppApiError): boolean {
+  const code = error.code?.toUpperCase() ?? "";
+  return error.status === 0 || code === "NETWORK_ERROR" || code === "REQUEST_TIMEOUT";
 }
 
 const STATUS_MESSAGES: Record<number, string> = {

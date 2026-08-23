@@ -1,12 +1,16 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { Suspense } from "react";
+import { NotificationsScreen } from "@/features/customer/notifications-screen";
+import { NotificationListSkeleton } from "@/features/customer/notification-list-skeleton";
 
-export const metadata = { title: "اعلان‌ها" };
+export const metadata = {
+  title: "اعلان‌ها",
+  robots: { index: false, follow: false },
+};
 
 export default function NotificationsPage() {
   return (
-    <RouteShell
-      title="اعلان‌ها"
-      description="فهرست اعلان‌های حساب در مرحله بعد پیاده‌سازی می‌شود."
-    />
+    <Suspense fallback={<NotificationListSkeleton />}>
+      <NotificationsScreen />
+    </Suspense>
   );
 }

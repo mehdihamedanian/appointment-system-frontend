@@ -1,4 +1,5 @@
 import {
+  ADMIN_LOGIN_PATH,
   ADMIN_PATH_PREFIX,
   AUTH_PATHS,
   CUSTOMER_PATH_PREFIXES,
@@ -7,6 +8,10 @@ import {
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+export function isAdminLoginRoute(pathname: string): boolean {
+  return pathname === ADMIN_LOGIN_PATH;
 }
 
 export function isAuthRoute(pathname: string): boolean {
@@ -22,6 +27,9 @@ export function isCustomerRoute(pathname: string): boolean {
 }
 
 export function isAdminRoute(pathname: string): boolean {
+  if (isAdminLoginRoute(pathname)) {
+    return false;
+  }
   return matchesPrefix(pathname, ADMIN_PATH_PREFIX);
 }
 

@@ -1,40 +1,31 @@
 "use client";
 
+import { X } from "lucide-react";
 import {
   useCallback,
-  useEffect,
   useId,
   useRef,
-  useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { OverlayPortal } from "@/components/ui/overlay-portal";
+import { IconButton } from "@/components/ui/icon-button";
+import { useIsClient } from "@/lib/accessibility/focus";
+import { useFocusTrap, useScrollLock } from "@/lib/accessibility/overlay";
+import { cx } from "@/lib/utilities/cx";
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+type ModalSize = "sm" | "md" | "lg" | "xl";
 
-type ModalSize = "sm" | "md" | "lg";
-
-type ModalProps = {
+export type ModalProps = {
   open: boolean;
   title: string;
   description?: string;
   size?: ModalSize;
   preventClose?: boolean;
   onClose: () => void;
-  children: ReactNode;
+  children?: ReactNode;
+  footer?: ReactNode;
+  showClose?: boolean;
 };
-
-function focusFirstElement(root: HTMLElement) {
-  const focusable = root.querySelectorAll<HTMLElement>(FOCUSABLE);
-  (focusable[0] ?? root).focus();
-}
-
-const subscribeIsClient = () => () => undefined;
-
-function useIsClient() {
-  return useSyncExternalStore(subscribeIsClient, () => true, () => false);
-}
 
 export function Modal({
   open,
@@ -44,112 +35,65 @@ export function Modal({
   preventClose = false,
   onClose,
   children,
+  footer,
+  showClose = true,
 }: ModalProps) {
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
   const mounted = useIsClient();
+  const getRoot = useCallback(() => dialogRef.current, []);
 
-  const setDialogRef = useCallback((node: HTMLDivElement | null) => {
-    dialogRef.current = node;
-    if (node) {
-      previouslyFocused.current = document.activeElement as HTMLElement | null;
-      focusFirstElement(node);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open || !mounted || !dialogRef.current) {
-      return;
-    }
-
-    focusFirstElement(dialogRef.current);
-  }, [open, mounted]);
-
-  useEffect(() => {
-    if (!open || !mounted) {
-      return;
-    }
-
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function onKeyDown(event: KeyboardEvent) {
-      const root = dialogRef.current;
-      if (event.key === "Escape" && !preventClose) {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (event.key !== "Tab" || !root) {
-        return;
-      }
-
-      const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (items.length === 0) {
-        event.preventDefault();
-        return;
-      }
-
-      const first = items[0];
-      const last = items[items.length - 1];
-      const active = document.activeElement;
-
-      if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = originalOverflow;
-      previouslyFocused.current?.focus();
-    };
-  }, [open, mounted, onClose, preventClose]);
+  useScrollLock(open && mounted);
+  useFocusTrap(open && mounted, getRoot, {
+    onEscape: onClose,
+    preventClose,
+  });
 
   if (!open || !mounted) {
     return null;
   }
 
-  const target = document.getElementById("modal-portal") ?? document.body;
-
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (!preventClose && event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-    >
+  return (
+    <OverlayPortal>
       <div
-        ref={setDialogRef}
-        className={`modal modal--${size}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description ? descriptionId : undefined}
-        tabIndex={-1}
+        className="modal-overlay"
+        onMouseDown={(event) => {
+          if (!preventClose && event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
       >
-        <h2 id={titleId} className="modal__title">
-          {title}
-        </h2>
-        {description ? (
-          <p id={descriptionId} className="modal__description">
-            {description}
-          </p>
-        ) : null}
-        {children}
+        <div
+          ref={dialogRef}
+          className={cx("modal", `modal--${size}`)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={description ? descriptionId : undefined}
+          tabIndex={-1}
+        >
+          <div className="modal__header">
+            <div>
+              <h2 id={titleId} className="modal__title">
+                {title}
+              </h2>
+              {description ? (
+                <p id={descriptionId} className="modal__description">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            {showClose && !preventClose ? (
+              <IconButton label="بستن" onClick={onClose}>
+                <X size={18} />
+              </IconButton>
+            ) : null}
+          </div>
+          <div className="modal__body">{children}</div>
+          {footer ? <div className="modal__actions">{footer}</div> : null}
+        </div>
       </div>
-    </div>,
-    target,
+    </OverlayPortal>
   );
 }

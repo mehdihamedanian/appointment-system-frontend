@@ -1,14 +1,15 @@
 import { AuthShell } from "@/components/layout/auth-shell";
+import { ResetPasswordForm } from "@/features/auth/reset-password-form";
 
-export const metadata = { title: "تنظیم رمز عبور" };
+export const metadata = { title: "رمز عبور جدید" };
 
 export default function ResetPasswordPage() {
   return (
     <AuthShell
       title="تنظیم رمز عبور جدید"
-      description="فرم تنظیم رمز در مرحله احراز هویت پیاده‌سازی می‌شود."
+      description="رمز عبور جدید را وارد کنید."
     >
-      <p>پس از تأیید پیوند بازیابی، رمز جدید اینجا تنظیم می‌شود.</p>
+      <ResetPasswordForm />
     </AuthShell>
   );
 }

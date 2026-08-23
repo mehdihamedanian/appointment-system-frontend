@@ -16,6 +16,8 @@ export type SessionUser = {
   displayName?: string;
   email?: string;
   phone?: string;
+  /** Optional public job / role label from Backend — never invent. */
+  jobTitle?: string;
   permissionCodes: readonly string[];
   adminPanelAccess: AdminPanelAccess;
 };

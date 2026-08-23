@@ -28,6 +28,8 @@ export type NavItem = {
   label: string;
   icon: NavIconName;
   capability?: CapabilityKey;
+  /** Opaque Backend permission code; omit when any admin with panel access may see it. */
+  permission?: string;
 };
 
 export type NavSection = {
@@ -56,62 +58,141 @@ export const customerSecondaryNavItems: NavItem[] = [
     icon: "wallet",
     capability: "onlinePayments",
   },
+  {
+    href: routes.customer.waitingList,
+    label: "لیست انتظار",
+    icon: "waitingList",
+    capability: "waitingList",
+  },
 ];
 
+/**
+ * Admin navigation — only routes that exist under `/admin/*`.
+ * Manual Booking and Schedules are omitted until those routes are implemented.
+ * Permission codes stay opaque placeholders until Backend documents them.
+ */
 export const adminNavSections: NavSection[] = [
   {
-    id: "operations",
-    label: "عملیات",
+    id: "daily-operations",
+    label: "عملیات روزانه",
     items: [
-      { href: routes.admin.home, label: "نمای کلی", icon: "overview" },
-      { href: routes.admin.appointments, label: "نوبت‌ها", icon: "appointments" },
-      { href: routes.admin.calendar, label: "تقویم", icon: "calendar" },
-      { href: routes.admin.customers, label: "مشتریان", icon: "customers" },
+      {
+        href: routes.admin.home,
+        label: "نمای کلی",
+        icon: "overview",
+        permission: "admin.dashboard.view",
+      },
+      {
+        href: routes.admin.appointments,
+        label: "نوبت‌ها",
+        icon: "appointments",
+        permission: "admin.appointments.view",
+      },
+      {
+        href: routes.admin.calendar,
+        label: "تقویم",
+        icon: "calendar",
+        permission: "admin.calendar.view",
+      },
       {
         href: routes.admin.waitingList,
         label: "لیست انتظار",
         icon: "waitingList",
         capability: "waitingList",
+        permission: "admin.waiting_list.view",
       },
     ],
   },
   {
-    id: "catalog",
-    label: "خدمات و منابع",
+    id: "business-management",
+    label: "مدیریت کسب‌وکار",
     items: [
-      { href: routes.admin.services, label: "خدمات", icon: "services" },
-      { href: routes.admin.staff, label: "کارکنان", icon: "staff" },
-      { href: routes.admin.resources, label: "منابع", icon: "resources" },
+      {
+        href: routes.admin.customers,
+        label: "مشتریان",
+        icon: "customers",
+        permission: "admin.customers.view",
+      },
+      {
+        href: routes.admin.services,
+        label: "خدمات",
+        icon: "services",
+        permission: "admin.services.view",
+      },
+      {
+        href: routes.admin.staff,
+        label: "کارکنان",
+        icon: "staff",
+        permission: "admin.staff.view",
+      },
+      {
+        href: routes.admin.resources,
+        label: "منابع",
+        icon: "resources",
+        permission: "admin.resources.view",
+      },
       {
         href: routes.admin.branches,
         label: "شعب",
         icon: "branches",
         capability: "multipleBranches",
+        permission: "admin.branches.view",
       },
     ],
   },
   {
-    id: "finance",
-    label: "مالی و ارتباط",
+    id: "finance-analytics",
+    label: "مالی و گزارش",
     items: [
       {
         href: routes.admin.payments,
         label: "پرداخت‌ها",
         icon: "payments",
         capability: "onlinePayments",
+        permission: "admin.payments.view",
       },
-      { href: routes.admin.notifications, label: "اعلان‌ها", icon: "bell" },
+      {
+        href: routes.admin.reports,
+        label: "گزارش‌ها",
+        icon: "reports",
+        permission: "admin.reports.view",
+      },
     ],
   },
   {
-    id: "organization",
-    label: "سازمان",
+    id: "system",
+    label: "سامانه",
     items: [
-      { href: routes.admin.reports, label: "گزارش‌ها", icon: "reports" },
-      { href: routes.admin.users, label: "کاربران", icon: "users" },
-      { href: routes.admin.roles, label: "نقش‌ها", icon: "roles" },
-      { href: routes.admin.settings, label: "تنظیمات", icon: "settings" },
-      { href: routes.admin.activityLogs, label: "رویدادها", icon: "activity" },
+      {
+        href: routes.admin.notifications,
+        label: "اعلان‌ها",
+        icon: "bell",
+        permission: "admin.notifications.view",
+      },
+      {
+        href: routes.admin.users,
+        label: "کاربران",
+        icon: "users",
+        permission: "admin.users.view",
+      },
+      {
+        href: routes.admin.roles,
+        label: "نقش‌ها",
+        icon: "roles",
+        permission: "admin.roles.view",
+      },
+      {
+        href: routes.admin.settings,
+        label: "تنظیمات",
+        icon: "settings",
+        permission: "admin.settings.view",
+      },
+      {
+        href: routes.admin.activityLogs,
+        label: "رویدادها",
+        icon: "activity",
+        permission: "admin.activity_logs.view",
+      },
     ],
   },
 ];

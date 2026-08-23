@@ -18,6 +18,15 @@ describe("safe login redirect", () => {
       "/dashboard",
     );
     expect(getSafeInternalRedirect("/session-expired")).toBe("/dashboard");
+    expect(getSafeInternalRedirect("/admin/login", "/admin", "admin")).toBe("/admin");
+  });
+
+  it("keeps customer and admin destinations separate", () => {
+    expect(getSafeInternalRedirect("/admin/appointments")).toBe("/dashboard");
+    expect(getSafeInternalRedirect("/dashboard", "/admin", "admin")).toBe("/admin");
+    expect(getSafeInternalRedirect("/admin/appointments", "/admin", "admin")).toBe(
+      "/admin/appointments",
+    );
   });
 
   it("attaches a sanitized redirect query to login", () => {
