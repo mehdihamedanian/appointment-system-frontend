@@ -1,12 +1,5 @@
-import { RouteShell } from "@/components/shared/route-shell";
-
-export const metadata = { title: "خدمات" };
+import { AdminServiceScreen } from "@/features/admin/services/admin-service-screen";
 
 export default function AdminServicesPage() {
-  return (
-    <RouteShell
-      title="خدمات"
-      description="مدیریت خدمات در فازهای بعد پیاده‌سازی می‌شود."
-    />
-  );
+  return <AdminServiceScreen />;
 }

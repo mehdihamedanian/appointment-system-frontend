@@ -8,8 +8,8 @@ export const metadata = {
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <AdminShell>
-      <AdminGuard>{children}</AdminGuard>
-    </AdminShell>
+    <AdminGuard>
+      <AdminShell>{children}</AdminShell>
+    </AdminGuard>
   );
 }

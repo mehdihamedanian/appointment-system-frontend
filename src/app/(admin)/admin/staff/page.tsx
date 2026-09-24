@@ -1,12 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AdminStaffScreen } from "@/features/admin/staff/admin-staff-screen";
 
 export const metadata = { title: "کارکنان" };
 
 export default function AdminStaffPage() {
-  return (
-    <RouteShell
-      title="کارکنان"
-      description="مدیریت کارکنان داخلی مجموعه در مرحله بعد پیاده‌سازی می‌شود."
-    />
-  );
+  return <AdminStaffScreen />;
 }

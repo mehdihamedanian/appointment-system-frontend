@@ -10,10 +10,10 @@ import { Pagination } from "@/components/ui/pagination";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import {
-  ApiErrorState,
+  BackendDependencyState,
   EmptyState,
-  PermissionDeniedState,
 } from "@/components/feedback/app-states";
+import { QueryErrorState } from "@/components/feedback/query-state";
 import { AppointmentCard } from "@/features/customer/appointment-card";
 import { AppointmentListSkeleton } from "@/features/customer/appointment-list-skeleton";
 import { useSession } from "@/features/auth/session-provider";
@@ -21,7 +21,7 @@ import {
   customerAppointmentListQueryOptions,
   fetchCustomerAppointments,
 } from "@/lib/api/appointments";
-import { isForbiddenError, isNotFoundError, toAppApiError } from "@/lib/api/errors";
+import { isNotFoundError, toAppApiError } from "@/lib/api/errors";
 import {
   appointmentsHref,
   parseAppointmentCategory,
@@ -160,17 +160,15 @@ export function AppointmentsScreen() {
             <div ref={item === category ? panelRef : undefined} tabIndex={-1} className="appointment-panel">
               {query.isPending ? <AppointmentListSkeleton /> : null}
               {error ? (
-                isForbiddenError(error) ? (
-                  <PermissionDeniedState description="برای مشاهده نوبت‌های خود مجوز لازم را ندارید." />
-                ) : (
-                  <ApiErrorState
-                    title={isNotFoundError(error) ? "فهرست نوبت‌ها هنوز متصل نیست" : "نوبت‌ها بارگذاری نشد"}
-                    description={
-                      isNotFoundError(error)
-                        ? "سرویس فهرست نوبت‌های مشتری هنوز در دسترس نیست. فهرستی ساخته نشد."
-                        : error.message
-                    }
+                isNotFoundError(error) ? (
+                  <BackendDependencyState
+                    title="فهرست نوبت‌ها هنوز متصل نیست"
+                    description="سرویس فهرست نوبت‌های مشتری هنوز در دسترس نیست. این حالت به‌معنای خالی بودن نوبت‌ها نیست."
                     requestId={error.requestId}
+                  />
+                ) : (
+                  <QueryErrorState
+                    error={error}
                     onRetry={() => {
                       void query.refetch();
                     }}

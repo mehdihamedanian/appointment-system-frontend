@@ -8,6 +8,7 @@ import { ApiErrorState, EmptyState } from "@/components/feedback/app-states";
 import { InlineLoading } from "@/components/feedback/loading-states";
 import { Button } from "@/components/ui/button";
 import { bookableSlotsQueryOptions } from "@/lib/api/booking";
+import type { BookableSlotsView } from "@/types/booking";
 import { toAppApiError } from "@/lib/api/errors";
 import { defaultCapabilities, isCapabilityVisible } from "@/config/capabilities";
 import { routes } from "@/constants/routes";
@@ -28,6 +29,8 @@ export function TimeStep({
   onPickAnotherDate,
   onBackToProvider,
   onBackToBranch,
+  buildSlotsQueryOptions,
+  showWaitingListActions = true,
 }: {
   serviceId?: string | null;
   branchId?: string | null;
@@ -42,12 +45,26 @@ export function TimeStep({
   onPickAnotherDate?: () => void;
   onBackToProvider?: () => void;
   onBackToBranch?: () => void;
+  buildSlotsQueryOptions?: (date: string) => {
+    queryKey: readonly unknown[];
+    queryFn: (context: { signal: AbortSignal }) => Promise<BookableSlotsView>;
+    enabled?: boolean;
+    staleTime?: number;
+    gcTime?: number;
+    refetchOnMount?: "always";
+    refetchOnReconnect?: boolean;
+    refetchOnWindowFocus?: boolean;
+    retry?: boolean;
+  };
+  showWaitingListActions?: boolean;
 }) {
   const slotsQuery = useQuery(
-    bookableSlotsQueryOptions(serviceId ?? "", branchId ?? undefined, preference, date ?? "", {
-      requiresBranch,
-      providerMode,
-    }),
+    buildSlotsQueryOptions && date
+      ? buildSlotsQueryOptions(date)
+      : bookableSlotsQueryOptions(serviceId ?? "", branchId ?? undefined, preference, date ?? "", {
+          requiresBranch,
+          providerMode,
+        }),
   );
   const refreshLock = useRef(false);
   const slots = slotsQuery.data;
@@ -116,7 +133,7 @@ export function TimeStep({
     );
   }
 
-  const waitingListVisible = isCapabilityVisible(defaultCapabilities, "waitingList");
+  const waitingListVisible = showWaitingListActions && isCapabilityVisible(defaultCapabilities, "waitingList");
   const showWaitingListJoin =
     waitingListVisible &&
     slots?.waitingListJoinAllowed === true &&

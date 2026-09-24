@@ -9,7 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormError, Label } from "@/components/ui/form-field";
 import { Select } from "@/components/ui/select";
-import { ApiErrorState, EmptyState } from "@/components/feedback/app-states";
+import { ApiErrorState, FeatureDisabledState } from "@/components/feedback/app-states";
 import { useToast } from "@/components/feedback/toast";
 import { ProviderSelectionField } from "@/features/providers/provider-selection-field";
 import { useSession } from "@/features/auth/session-provider";
@@ -102,7 +102,7 @@ export function WaitingListJoinScreen() {
     return (
       <div className="waiting-list-page">
         <PageHeader title="پیوستن به لیست انتظار" />
-        <EmptyState
+        <FeatureDisabledState
           title="لیست انتظار فعال نیست"
           description="این قابلیت برای مجموعه در حال حاضر غیرفعال است."
         />

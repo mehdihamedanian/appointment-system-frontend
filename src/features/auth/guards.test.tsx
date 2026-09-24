@@ -74,7 +74,7 @@ describe("route guards", () => {
       },
     );
 
-    expect(screen.getByText("دسترسی مجاز نیست")).toBeInTheDocument();
+    expect(screen.getByText("دسترسی مدیریت ندارید")).toBeInTheDocument();
     expect(screen.queryByText("پنل مدیریت")).not.toBeInTheDocument();
   });
 

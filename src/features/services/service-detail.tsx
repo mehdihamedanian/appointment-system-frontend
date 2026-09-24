@@ -72,7 +72,7 @@ export function ServiceDetail({
           src={service.imageUrl}
           alt={service.imageUrl ? `تصویر خدمت ${service.name}` : ""}
           priority
-          sizes="(max-width: 960px) 100vw, 48vw"
+          sizes="(max-width: 1024px) 100vw, 48vw"
           className="service-detail__media public-card-media"
         />
         <div className="service-detail__facts">

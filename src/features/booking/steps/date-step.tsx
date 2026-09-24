@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ApiErrorState, EmptyState } from "@/components/feedback/app-states";
 import { InlineLoading } from "@/components/feedback/loading-states";
 import { bookableDatesQueryOptions } from "@/lib/api/booking";
+import type { BookableDatesView } from "@/types/booking";
 import {
   availabilityTodayIso,
   dayStatusMap,
@@ -28,6 +29,7 @@ export function DateStep({
   onSelect,
   timezone,
   submitted,
+  buildDatesQueryOptions,
 }: {
   serviceId?: string | null;
   branchId?: string | null;
@@ -38,6 +40,17 @@ export function DateStep({
   onSelect: (iso: string | null) => void;
   timezone?: string;
   submitted?: boolean;
+  buildDatesQueryOptions?: (month: string) => {
+    queryKey: readonly unknown[];
+    queryFn: (context: { signal: AbortSignal }) => Promise<BookableDatesView>;
+    enabled?: boolean;
+    staleTime?: number;
+    gcTime?: number;
+    refetchOnMount?: "always";
+    refetchOnReconnect?: boolean;
+    refetchOnWindowFocus?: boolean;
+    retry?: boolean;
+  };
 }) {
   const todayFallback = todayIsoInTimeZone(timezone);
   const [month, setMonth] = useState(() => (selected ?? todayFallback).slice(0, 7));
@@ -50,10 +63,12 @@ export function DateStep({
   }
 
   const datesQuery = useQuery(
-    bookableDatesQueryOptions(serviceId ?? "", branchId ?? undefined, preference, month, {
-      requiresBranch,
-      providerMode,
-    }),
+    buildDatesQueryOptions
+      ? buildDatesQueryOptions(month)
+      : bookableDatesQueryOptions(serviceId ?? "", branchId ?? undefined, preference, month, {
+          requiresBranch,
+          providerMode,
+        }),
   );
 
   const dates = datesQuery.data;

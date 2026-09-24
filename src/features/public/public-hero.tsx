@@ -38,7 +38,7 @@ export function PublicHero({ business }: { business: PublicBusiness }) {
             alt=""
             fill
             priority
-            sizes="(max-width: 720px) 100vw, 40vw"
+            sizes="(max-width: 768px) 100vw, 40vw"
           />
         </div>
       ) : null}

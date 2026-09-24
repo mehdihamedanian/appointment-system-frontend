@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/data-display";
@@ -22,32 +22,10 @@ import {
 } from "@/lib/api/customer-notifications";
 import { clampUnreadBadge } from "@/lib/customer/notification-adapter";
 import { isForbiddenError, toAppApiError } from "@/lib/api/errors";
+import { useIsMobileViewport } from "@/lib/responsive/use-media-query";
 import { queryKeys } from "@/lib/query/keys";
 import { routes } from "@/constants/routes";
 
-function subscribeMobile(onChange: () => void) {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return () => undefined;
-  }
-  const media = window.matchMedia("(max-width: 767px)");
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
-function getMobileSnapshot() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return false;
-  }
-  return window.matchMedia("(max-width: 767px)").matches;
-}
-
-function getServerMobileSnapshot() {
-  return false;
-}
-
-function useIsMobileViewport() {
-  return useSyncExternalStore(subscribeMobile, getMobileSnapshot, getServerMobileSnapshot);
-}
 
 function NotificationPreviewPanel({
   onClose,

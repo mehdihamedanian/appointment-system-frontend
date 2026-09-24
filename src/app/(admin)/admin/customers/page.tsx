@@ -1,15 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AdminCustomerScreen } from "@/features/admin/customers/admin-customer-screen";
 
 export const metadata = { title: "مشتریان" };
 
 export default function AdminCustomersPage() {
-  return (
-    <>
-      <RouteShell
-        title="مشتریان"
-        description="فهرست مشتریان در مرحله بعد به این صفحه متصل می‌شود."
-      />
-      <div className="table-foundation" aria-hidden="true" />
-    </>
-  );
+  return <AdminCustomerScreen />;
 }

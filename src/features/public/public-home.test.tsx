@@ -199,7 +199,7 @@ describe("public homepage sections", () => {
     renderWithProviders(
       <PublicHomeError message="اطلاعات این مجموعه در دسترس نیست." requestId="req_home" />,
     );
-    expect(screen.getByText("صفحه مجموعه در دسترس نیست")).toBeInTheDocument();
+    expect(screen.getByText("ارتباط برقرار نشد")).toBeInTheDocument();
     expect(screen.getByText(/req_home/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "تلاش دوباره" })).toBeInTheDocument();
   });

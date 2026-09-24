@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import {
   ApiErrorState,
   EmptyState,
+  FeatureDisabledState,
   PermissionDeniedState,
 } from "@/components/feedback/app-states";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function WaitingListScreen() {
     return (
       <div className="waiting-list-page">
         <PageHeader title="لیست انتظار" />
-        <EmptyState
+        <FeatureDisabledState
           title="لیست انتظار فعال نیست"
           description="این قابلیت برای مجموعه در حال حاضر غیرفعال است."
           action={

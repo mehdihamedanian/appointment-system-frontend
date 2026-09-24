@@ -1,12 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AdminActivityLogsScreen } from "@/features/admin/activity-logs/admin-activity-logs-screen";
 
-export const metadata = { title: "رویدادها" };
+export const metadata = { title: "گزارش فعالیت" };
 
 export default function AdminActivityLogsPage() {
-  return (
-    <RouteShell
-      title="رویدادها"
-      description="سوابق فعالیت پس از تعریف قرارداد API در این صفحه نمایش داده می‌شود."
-    />
-  );
+  return <AdminActivityLogsScreen />;
 }

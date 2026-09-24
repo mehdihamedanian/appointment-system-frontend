@@ -220,6 +220,22 @@ export const getPublicBranches = cache(async (): Promise<PublicBranch[]> => {
   return adaptPublicBranches(payload);
 });
 
+export async function fetchPublicBranches(signal?: AbortSignal): Promise<PublicBranch[]> {
+  const payload = await apiClient<unknown>("/public/branches", {
+    method: "GET",
+    signal,
+  });
+  return adaptPublicBranches(payload);
+}
+
+export async function fetchPublicProviders(signal?: AbortSignal): Promise<PublicProvider[]> {
+  const payload = await apiClient<unknown>("/public/providers", {
+    method: "GET",
+    signal,
+  });
+  return adaptPublicProviders(payload);
+}
+
 export const loadPublicBusiness = cache(async () => load(getPublicBusiness));
 
 export const loadPublicServiceCatalog = cache(async (currency?: string, filters?: ServiceFilters) =>

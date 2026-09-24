@@ -15,6 +15,7 @@ import { PaymentPricingSummary } from "@/features/booking/payment-pricing";
 import Link from "next/link";
 import { createPaymentSession, paymentNavigation } from "@/lib/api/payment";
 import { fetchBookingQuote } from "@/lib/api/booking";
+import { fetchPublicBusiness } from "@/lib/api/public";
 import { slotHoldQueryOptions } from "@/lib/api/hold";
 import {
   isNetworkUncertaintyError,
@@ -43,6 +44,7 @@ import { HOLD_REVALIDATE_NEAR_MS } from "@/types/hold";
 import { emptyBookingDraft } from "@/types/booking";
 import type { PaymentMethodType } from "@/types/payment";
 import { queryKeys } from "@/lib/query/keys";
+import { isAdminCouponsEnabled } from "@/lib/admin/coupon-context";
 import { routes, LOGIN_PATH } from "@/constants/routes";
 import type { AppApiError } from "@/types/api";
 
@@ -73,10 +75,17 @@ export function PaymentScreen() {
     ...slotHoldQueryOptions(holdReference ?? ""),
     enabled: Boolean(holdReference),
   });
-  const quoteFingerprint = `${quoteIntentFingerprint(draft, draft.quoteId)}:${couponCode ?? ""}`;
+  const businessQuery = useQuery({
+    queryKey: queryKeys.publicBusiness,
+    queryFn: ({ signal }) => fetchPublicBusiness(signal),
+    staleTime: 60_000,
+  });
+  const couponsFeatureEnabled = isAdminCouponsEnabled(businessQuery.data);
+  const activeCouponCode = couponsFeatureEnabled ? couponCode : undefined;
+  const quoteFingerprint = `${quoteIntentFingerprint(draft, draft.quoteId)}:${activeCouponCode ?? ""}`;
   const quoteQuery = useQuery({
     queryKey: queryKeys.booking.quote(quoteFingerprint),
-    queryFn: ({ signal }) => fetchBookingQuote(draft, signal, couponCode),
+    queryFn: ({ signal }) => fetchBookingQuote(draft, signal, activeCouponCode),
     enabled: Boolean(draft.serviceId && draft.slotId && draft.date),
     staleTime: 10_000,
     refetchOnMount: "always",
@@ -415,17 +424,19 @@ export function PaymentScreen() {
             onSelect={setMethod}
             disabled={blocked}
           />
-          <CouponField
-            value={couponInput}
-            onChange={setCouponInput}
-            onApply={() => void applyCoupon()}
-            onRemove={() => void removeCoupon()}
-            applied={quote.coupon?.status === "applied" ? quote.coupon : undefined}
-            loading={applyingCoupon}
-            error={couponError}
-            success={couponSuccess}
-            disabled={blocked}
-          />
+          {couponsFeatureEnabled ? (
+            <CouponField
+              value={couponInput}
+              onChange={setCouponInput}
+              onApply={() => void applyCoupon()}
+              onRemove={() => void removeCoupon()}
+              applied={quote.coupon?.status === "applied" ? quote.coupon : undefined}
+              loading={applyingCoupon}
+              error={couponError}
+              success={couponSuccess}
+              disabled={blocked}
+            />
+          ) : null}
         </div>
         <aside className="booking-payment__aside" aria-label="خلاصه پرداخت">
           {selectedOption?.payableNowLabel ?? quote.payableNowLabel ? (

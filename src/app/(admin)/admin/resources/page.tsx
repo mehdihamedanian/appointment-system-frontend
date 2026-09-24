@@ -1,12 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AdminResourcesScreen } from "@/features/admin/resources/admin-resources-screen";
 
 export const metadata = { title: "منابع" };
 
 export default function AdminResourcesPage() {
-  return (
-    <RouteShell
-      title="منابع"
-      description="اتاق‌ها، دستگاه‌ها، صندلی‌ها و سایر منابع داخلی در مرحله بعد مدیریت می‌شوند."
-    />
-  );
+  return <AdminResourcesScreen />;
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Vazirmatn } from "next/font/google";
 import { SkipLink } from "@/components/layout/skip-link";
 import { getDocumentLocale } from "@/config/locale";
@@ -21,6 +21,13 @@ export const metadata: Metadata = {
     template: `%s | ${env.appName}`,
   },
   description: env.appTagline,
+};
+
+/** Enables safe-area insets used by sticky CTAs and shells (Phase 43). */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

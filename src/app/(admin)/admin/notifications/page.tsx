@@ -1,12 +1,8 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { redirect } from "next/navigation";
+import { routes } from "@/constants/routes";
 
 export const metadata = { title: "اعلان‌ها" };
 
 export default function AdminNotificationsPage() {
-  return (
-    <RouteShell
-      title="اعلان‌ها"
-      description="ارسال و پیگیری اعلان‌ها در مرحله بعد پیاده‌سازی می‌شود."
-    />
-  );
+  redirect(routes.admin.notificationTemplates);
 }

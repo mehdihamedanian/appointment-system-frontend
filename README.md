@@ -103,6 +103,55 @@ npm run build
   `/appointments/[appointmentReference]/review`. Eligibility, rating scale,
   comment rules, and moderation state come from Backend only. Capability
   `reviews` gates visibility. Edit/delete are omitted until Backend supports them.
+- Admin application shell is Phase 23 under `/admin/*`. Shared layout includes
+  sidebar/drawer, header, breadcrumb, user menu, and notification shell.
+  Navigation is permission- and capability-filtered. Manual Booking and
+  Schedules are omitted until those routes exist.
+- Admin operational dashboard is Phase 24 at `/admin`. Metrics, alerts, and
+  recent appointments come from `GET /admin/dashboard` only. Quick Add stays
+  hidden until Phase 26 manual booking route exists.
+- Admin appointment management is Phase 25 at `/admin/appointments` with detail,
+  cancellation, internal note, and status actions driven by Backend
+  `allowedActions`. Admin reschedule UI stays gated until its API exists.
+- Admin manual booking is Phase 26 at `/admin/bookings/new`. Customer search,
+  create, availability, allocation, quote, and confirm use admin booking APIs.
+- Admin operational calendar is Phase 27 at `/admin/calendar`. Visible-range
+  events (appointments, blocked time, time off), Day/Week/Month, and grouping
+  come from `GET /admin/calendar`. Drag & Drop is not enabled.
+- Admin resource management is Phase 28 at `/admin/resources` (list, create,
+  edit, detail, calendar redirect). Unified Resource model covers rooms,
+  devices, and other operational resources; Staff administration stays Phase 29.
+  Resource Calendar reuses Phase 27 with a preselected resource filter.
+- Admin staff management is Phase 29 at `/admin/staff` (list, create, edit,
+  detail, calendar redirect, optional performance). Staff, Bookable Provider,
+  Admin User, and Resource references stay distinct. Customer-visible and
+  bookable flags are independent.
+- Admin service resource mapping is Phase 30 at
+  `/admin/services/[serviceReference]/resources`. Defines per-service resource
+  requirements (any-of-type vs specific); allocation and slots remain backend-driven.
+- Admin service management is Phase 31 at `/admin/services` (list, create, edit,
+  detail, customer preview). Resource requirements reuse Phase 30 editor in the
+  edit form and dedicated resources sub-route.
+- Admin schedule management is Phase 32 at `/admin/schedules` (shared editor for
+  business, branch, staff, and resource working hours, breaks, holidays, time off,
+  and blocks). Effective schedule and impact preview remain backend-driven.
+- Admin reports are Phase 39 at `/admin/reports`. Metrics, comparisons, peak times,
+  and exports come from Backend report endpoints only — never client-side aggregation.
+- Admin users/roles are Phase 40 at `/admin/users` and `/admin/roles`. Permission
+  Matrix uses Backend catalog only; Admin User, Staff, and Customer stay distinct.
+- Admin business settings are Phase 41 at `/admin/settings` (general, localization,
+  booking, payments, notifications). High-impact currency/timezone and booking
+  changes use Backend impact preview; no client FX or scheduling math.
+- Admin activity logs are Phase 42 at `/admin/activity-logs`. Immutable Backend
+  audit records only — no client-fabricated events or editable log entities.
+- Phase 43 responsive audit remediates public, auth, customer, and admin layouts
+  against canonical breakpoints (480 / 768 / 1024 / 1280). Customer/public are
+  mobile-first; admin is desktop-first with drawer navigation below 1024px.
+  Sticky CTAs use safe-area insets; admin tables dual-layout at `64rem`.
+- Phase 44 global UX states standardize loading/empty/no-results/error/permission/
+  feature-disabled/backend-dependency/conflict/session-expired across routes.
+  Session expiry clears sensitive caches once; toasts soft-dedupe; destructive
+  confirms focus Cancel first. Shared components live in `src/components/feedback/`.
 - Design System catalog (development only): http://localhost:3000/dev/design-system
 
 ## Repository boundary

@@ -28,7 +28,7 @@ export function ServiceMedia({
           alt={alt}
           fill
           priority={priority}
-          sizes={sizes ?? "(max-width: 720px) 100vw, (max-width: 960px) 50vw, 33vw"}
+          sizes={sizes ?? "(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"}
           onError={() => setFailed(true)}
         />
       ) : (

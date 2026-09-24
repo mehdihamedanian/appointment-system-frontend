@@ -46,10 +46,6 @@ const DEFAULT_DURATION = 4500;
 const ToastContext = createContext<ToastApi | null>(null);
 let toastBridge: ToastApi | null = null;
 
-function createId(): string {
-  return `toast-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const timers = useRef<Record<string, number>>({});
@@ -69,15 +65,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback(
     (kind: ToastKind, message: string, options?: ToastOptions) => {
-      const id = options?.id ?? createId();
+      const normalizedMessage = message.trim();
+      const contentKey = `${kind}:${normalizedMessage}`;
+      const id = options?.id ?? `toast-${contentKey}`;
       const duration =
         kind === "loading" ? 0 : (options?.duration ?? DEFAULT_DURATION);
 
       setToasts((current) => {
-        const next = [
-          ...current.filter((toast) => toast.id !== id),
-          { id, kind, message, duration },
-        ];
+        const withoutSame =
+          options?.id != null
+            ? current.filter((toast) => toast.id !== options.id)
+            : current.filter(
+                (toast) => !(toast.kind === kind && toast.message === normalizedMessage),
+              );
+        const next = [...withoutSame, { id, kind, message: normalizedMessage, duration }];
         return next.slice(-MAX_TOASTS);
       });
 

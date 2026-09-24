@@ -1,12 +1,5 @@
-import { RouteShell } from "@/components/shared/route-shell";
-
-export const metadata = { title: "لیست انتظار" };
+import { AdminWaitingListScreen } from "@/features/admin/waiting-list/admin-waiting-list-screen";
 
 export default function AdminWaitingListPage() {
-  return (
-    <RouteShell
-      title="لیست انتظار"
-      description="این ماژول اختیاری است و با قابلیت لیست انتظار مجموعه هم‌خوان می‌شود."
-    />
-  );
+  return <AdminWaitingListScreen />;
 }

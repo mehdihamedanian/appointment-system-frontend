@@ -24,4 +24,24 @@ describe("toast announcements", () => {
     await user.click(screen.getByRole("button", { name: "خطا" }));
     expect(screen.getByRole("alert")).toHaveTextContent("عملیات ناموفق بود");
   });
+
+  it("deduplicates identical error toasts instead of stacking", async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <button type="button" onClick={() => toast.error("خطای تکراری")}>
+          خطا
+        </button>
+      </ToastProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "خطا" }));
+    await user.click(screen.getByRole("button", { name: "خطا" }));
+    await user.click(screen.getByRole("button", { name: "خطا" }));
+
+    const visible = screen.getAllByText("خطای تکراری");
+    // live region + visible toast
+    expect(visible.length).toBeLessThanOrEqual(2);
+    expect(document.querySelectorAll('.toast[data-kind="error"]').length).toBe(1);
+  });
 });

@@ -2,6 +2,7 @@ export const capabilityKeys = [
   "multipleBranches",
   "selectableProviders",
   "onlinePayments",
+  "coupons",
   "waitingList",
   "reviews",
 ] as const;
@@ -20,6 +21,7 @@ export const defaultCapabilities: BusinessCapabilities = {
   multipleBranches: "unknown",
   selectableProviders: "unknown",
   onlinePayments: "unknown",
+  coupons: "unknown",
   waitingList: "unknown",
   reviews: "unknown",
 };

@@ -37,6 +37,10 @@ export type PublicBusiness = {
   bookingEnabled: boolean;
   providerPresentationEnabled: boolean;
   branchesEnabled: boolean;
+  /** When false, coupon admin and entry are hidden. Omit until Backend provides the flag. */
+  couponsEnabled?: boolean;
+  /** When false, waiting-list admin and customer entry are hidden. Omit until Backend provides the flag. */
+  waitingListEnabled?: boolean;
   workingHours: WorkingHoursDay[];
   contactHours: WorkingHoursDay[];
 };

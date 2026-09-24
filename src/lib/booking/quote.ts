@@ -1,6 +1,6 @@
 import { isTimestampExpired } from "@/lib/date-time/format";
 import type { AppApiError } from "@/types/api";
-import type { BookingQuoteView, QuotePaymentMode } from "@/types/booking";
+import type { QuotePaymentMode } from "@/types/booking";
 
 export function isQuoteChangedError(error: AppApiError): boolean {
   const code = error.code?.toUpperCase() ?? "";
@@ -29,7 +29,11 @@ export function isQuoteExpiredError(error: AppApiError): boolean {
  * is compared on that clock plus elapsed local time since the Quote was received.
  * No timer is invented when expiresAt is omitted.
  */
-export function isQuoteExpired(quote: BookingQuoteView, receivedAt: number, now = Date.now()): boolean {
+export function isQuoteExpired(
+  quote: { expiresAt?: string; serverNow?: string; [key: string]: unknown },
+  receivedAt: number,
+  now = Date.now(),
+): boolean {
   if (!quote.expiresAt) {
     return false;
   }

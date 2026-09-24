@@ -1,4 +1,4 @@
-import { ApiErrorState } from "@/components/feedback/app-states";
+import { ApiErrorState, BackendDependencyState } from "@/components/feedback/app-states";
 import { AboutSection } from "@/features/public/about-section";
 import { BranchesSection } from "@/features/public/branches-section";
 import { ContactSection } from "@/features/public/contact-section";
@@ -11,6 +11,7 @@ import { PublicHero } from "@/features/public/public-hero";
 import { RefreshButton } from "@/features/public/refresh-button";
 import { StickyBookingCta } from "@/features/public/sticky-booking-cta";
 import { loadPublicHome } from "@/lib/api/public";
+import { classifyApiError } from "@/lib/api/error-ui";
 
 export async function PublicHome() {
   const result = await loadPublicHome();
@@ -19,6 +20,8 @@ export async function PublicHome() {
       <PublicHomeError
         message={result.business.error.message}
         requestId={result.business.error.requestId}
+        code={result.business.error.code}
+        status={result.business.error.status}
       />
     );
   }
@@ -47,13 +50,30 @@ export async function PublicHome() {
 export function PublicHomeError({
   message,
   requestId,
+  code,
+  status = 0,
 }: {
   message: string;
   requestId?: string;
+  code?: string;
+  status?: number;
 }) {
+  const classified = classifyApiError({ status, code, message, requestId });
   return (
     <div className="public-home">
-      <ApiErrorState title="صفحه مجموعه در دسترس نیست" description={message} requestId={requestId} />
+      {classified.kind === "backend_dependency" ? (
+        <BackendDependencyState
+          title="صفحه مجموعه آماده نیست"
+          description="اتصال به سرویس عمومی هنوز برقرار نیست. این به‌معنای خالی بودن اطلاعات کسب‌وکار نیست."
+          requestId={requestId}
+        />
+      ) : (
+        <ApiErrorState
+          title={classified.title}
+          description={classified.description || message}
+          requestId={requestId}
+        />
+      )}
       <RefreshButton />
     </div>
   );

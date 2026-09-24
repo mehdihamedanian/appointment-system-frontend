@@ -68,7 +68,6 @@ export const customerSecondaryNavItems: NavItem[] = [
 
 /**
  * Admin navigation — only routes that exist under `/admin/*`.
- * Manual Booking and Schedules are omitted until those routes are implemented.
  * Permission codes stay opaque placeholders until Backend documents them.
  */
 export const adminNavSections: NavSection[] = [
@@ -81,6 +80,12 @@ export const adminNavSections: NavSection[] = [
         label: "نمای کلی",
         icon: "overview",
         permission: "admin.dashboard.view",
+      },
+      {
+        href: routes.admin.manualBooking,
+        label: "ثبت نوبت",
+        icon: "booking",
+        permission: "admin.appointments.create",
       },
       {
         href: routes.admin.appointments,
@@ -138,6 +143,12 @@ export const adminNavSections: NavSection[] = [
         capability: "multipleBranches",
         permission: "admin.branches.view",
       },
+      {
+        href: routes.admin.schedules,
+        label: "زمان‌بندی",
+        icon: "calendar",
+        permission: "admin.schedules.business.view",
+      },
     ],
   },
   {
@@ -150,6 +161,13 @@ export const adminNavSections: NavSection[] = [
         icon: "payments",
         capability: "onlinePayments",
         permission: "admin.payments.view",
+      },
+      {
+        href: routes.admin.coupons,
+        label: "کوپن‌ها",
+        icon: "wallet",
+        capability: "coupons",
+        permission: "admin.coupons.view",
       },
       {
         href: routes.admin.reports,

@@ -1,12 +1,7 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { AdminUsersScreen } from "@/features/admin/users/admin-users-screen";
 
 export const metadata = { title: "کاربران" };
 
 export default function AdminUsersPage() {
-  return (
-    <RouteShell
-      title="کاربران"
-      description="مدیریت کاربران داخلی پس از مشخص شدن قرارداد نقش‌ها پیاده‌سازی می‌شود."
-    />
-  );
+  return <AdminUsersScreen />;
 }

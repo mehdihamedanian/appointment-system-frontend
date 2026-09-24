@@ -13,6 +13,7 @@ import { StarRating } from "@/components/ui/star-rating";
 import {
   ApiErrorState,
   EmptyState,
+  FeatureDisabledState,
   NoResultsState,
   PermissionDeniedState,
   SessionExpiredState,
@@ -168,7 +169,7 @@ export function AppointmentReviewScreen({ reference }: { reference: string }) {
     return (
       <div className="appointment-review">
         <PageHeader title="ثبت نظر" />
-        <EmptyState
+        <FeatureDisabledState
           title="ثبت نظر فعال نیست"
           description="این قابلیت برای مجموعه در حال حاضر غیرفعال است."
           action={

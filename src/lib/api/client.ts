@@ -129,7 +129,9 @@ function buildHeaders(
   headers.set("Accept", headers.get("Accept") ?? DEFAULT_ACCEPT);
 
   const hasBody = options.body !== undefined && options.method !== "GET";
-  if (hasBody && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (hasBody && !headers.has("Content-Type") && !isFormData) {
     headers.set("Content-Type", DEFAULT_CONTENT_TYPE);
   }
 
@@ -159,15 +161,19 @@ export async function apiClient<T>(
   const timeoutMs = options.timeoutMs ?? env.requestTimeoutMs;
   const signal = mergeSignals(timeoutMs, options.signal);
 
+  const requestBody =
+    options.body === undefined || method === "GET"
+      ? undefined
+      : typeof FormData !== "undefined" && options.body instanceof FormData
+        ? options.body
+        : JSON.stringify(options.body);
+
   let response: Response;
   try {
     response = await fetch(url, {
       method,
       headers,
-      body:
-        options.body === undefined || method === "GET"
-          ? undefined
-          : JSON.stringify(options.body),
+      body: requestBody,
       credentials: options.credentials ?? "include",
       signal,
       cache: "no-store",

@@ -61,6 +61,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler((error) => {
+      // Single coordinated expiry path: clear sensitive caches once, then mark session.
+      clearFrontendCaches(queryClient);
       queryClient.setQueryData(sessionQueryOptions.queryKey, {
         status: isSessionExpiredError(error) ? "expired" : "unauthenticated",
         user: null,

@@ -124,11 +124,18 @@
   --container-md: 56rem;
   --container-lg: 72rem;
   --container-xl: 80rem;
+  /* Max readable width on ultra-wide desktops (Phase 43). */
+  --content-max: 90rem;
   --sidebar-width: 16.5rem;
   --sidebar-width-collapsed: 4.75rem;
   --header-height: 4rem;
   --bottom-nav-height: 4.5rem;
 
+  /*
+   * Canonical breakpoints (align JS + CSS; do not invent others):
+   * sm 480px / 30rem | md 768px / 48rem | lg 1024px / 64rem | xl 1280px / 80rem
+   * Prefer min-width: 48rem / 64rem. Below-md = max-width: 767px; below-lg = max-width: 1023px.
+   */
   --breakpoint-sm: 480px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;

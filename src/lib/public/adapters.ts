@@ -257,6 +257,13 @@ export function adaptPublicBusiness(payload: unknown): PublicBusiness | null {
     readBoolean(source.branchesEnabled) ??
     readBoolean(source.multipleBranches) ??
     false;
+  const couponsEnabled =
+    readBoolean(source.couponsEnabled) ??
+    readBoolean(source.discountCouponsEnabled) ??
+    readBoolean(isRecord(source.capabilities) ? source.capabilities.coupons : undefined);
+  const waitingListEnabled =
+    readBoolean(source.waitingListEnabled) ??
+    readBoolean(isRecord(source.capabilities) ? source.capabilities.waitingList : undefined);
 
   return {
     name,
@@ -280,6 +287,8 @@ export function adaptPublicBusiness(payload: unknown): PublicBusiness | null {
     bookingEnabled,
     providerPresentationEnabled,
     branchesEnabled,
+    ...(couponsEnabled !== undefined ? { couponsEnabled } : {}),
+    ...(waitingListEnabled !== undefined ? { waitingListEnabled } : {}),
     workingHours: adaptWorkingHours(
       source.workingHours ?? source.hours ?? source.businessHours,
     ),

@@ -284,6 +284,12 @@
   margin-top: var(--space-6);
 }
 
+.confirm-dialog__consequence {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 @keyframes skeleton-shimmer {
   0% {
     background-position: 100% 0;

@@ -1,12 +1,8 @@
-import { RouteShell } from "@/components/shared/route-shell";
+import { redirect } from "next/navigation";
+import { routes } from "@/constants/routes";
 
 export const metadata = { title: "تنظیمات" };
 
 export default function AdminSettingsPage() {
-  return (
-    <RouteShell
-      title="تنظیمات"
-      description="تنظیمات این مجموعه در مرحله بعد به این صفحه متصل می‌شود."
-    />
-  );
+  redirect(routes.admin.settingsGeneral);
 }

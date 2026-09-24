@@ -2,8 +2,8 @@
 
 import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ApiErrorState, PermissionDeniedState } from "@/components/feedback/app-states";
-import { PageLoading } from "@/components/feedback/loading-states";
+import { AdminAccessState } from "@/features/admin/admin-access-state";
+import { PermissionGate } from "@/features/admin/permission-gate";
 import { useSession } from "@/features/auth/session-provider";
 import {
   ADMIN_LOGIN_PATH,
@@ -16,10 +16,13 @@ import {
   withRedirectParam,
   type RedirectAudience,
 } from "@/lib/auth/safe-redirect";
+import { findAdminNavItem } from "@/lib/admin/navigation";
 import {
   canAccessAdminPanel,
   isAdminAccessUnknown,
 } from "@/lib/permissions/access";
+import { PageLoading } from "@/components/feedback/loading-states";
+import { ApiErrorState } from "@/components/feedback/app-states";
 
 type GuardProps = {
   children: ReactNode;
@@ -101,26 +104,29 @@ export function CustomerGuard({ children }: GuardProps) {
 export function AdminGuard({ children }: GuardProps) {
   const { status, user, message, refetch } = useSession();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
+    const search = searchParams.toString();
+    const current = search ? `${pathname}?${search}` : pathname;
     if (status === "unauthenticated") {
-      router.replace(withRedirectParam(ADMIN_LOGIN_PATH, pathname, "admin"));
+      router.replace(withRedirectParam(ADMIN_LOGIN_PATH, current, "admin"));
     }
     if (status === "expired") {
-      router.replace(SESSION_EXPIRED_PATH);
+      router.replace(withRedirectParam(SESSION_EXPIRED_PATH, current, "admin"));
     }
-  }, [pathname, router, status]);
+  }, [pathname, router, searchParams, status]);
 
   if (status === "loading" || status === "unauthenticated" || status === "expired") {
-    return <PageLoading label="در حال بررسی دسترسی مدیریت" />;
+    return <AdminAccessState kind={status === "expired" ? "session-expired" : "loading"} />;
   }
 
   if (status === "error") {
     return (
-      <ApiErrorState
-        title="بررسی نشست ممکن نشد"
-        description={message ?? "لطفاً دوباره تلاش کنید."}
+      <AdminAccessState
+        kind="session-error"
+        message={message}
         onRetry={() => {
           void refetch();
         }}
@@ -129,10 +135,17 @@ export function AdminGuard({ children }: GuardProps) {
   }
 
   if (user && !canAccessAdminPanel(user) && !isAdminAccessUnknown(user)) {
-    return (
-      <PermissionDeniedState description="این بخش فقط برای کاربران مجاز پنل مدیریت در دسترس است." />
-    );
+    return <AdminAccessState kind="customer-rejected" />;
   }
 
-  return children;
+  const routePermission = findAdminNavItem(pathname)?.permission;
+
+  return (
+    <PermissionGate
+      permission={routePermission}
+      fallback={<AdminAccessState kind="route-denied" />}
+    >
+      {children}
+    </PermissionGate>
+  );
 }

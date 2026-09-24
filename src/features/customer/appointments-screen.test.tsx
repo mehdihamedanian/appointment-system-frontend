@@ -147,7 +147,7 @@ describe("AppointmentsScreen", () => {
     search.current = new URLSearchParams("category=past");
     mockedClient.mockRejectedValue(new ApiError({ status: 500, message: "خطا", requestId: "req_ap" }));
     renderWithProviders(<AppointmentsScreen />);
-    expect(await screen.findByText("نوبت‌ها بارگذاری نشد")).toBeInTheDocument();
+    expect(await screen.findByText("اختلال موقت سرویس")).toBeInTheDocument();
     expect(screen.getByText("req_ap")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /گذشته/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByText("هنوز نوبت تکمیل‌شده‌ای ندارید.")).not.toBeInTheDocument();

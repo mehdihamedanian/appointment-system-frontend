@@ -29,7 +29,17 @@ import {
 import { FileUpload, type UploadItem } from "@/components/ui/file-upload";
 import { Modal } from "@/components/feedback/modal";
 import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
-import { EmptyState, NoResultsState, ApiErrorState, SuccessState } from "@/components/feedback/app-states";
+import {
+  EmptyState,
+  NoResultsState,
+  ApiErrorState,
+  SuccessState,
+  PermissionDeniedState,
+  SessionExpiredState,
+  FeatureDisabledState,
+  BackendDependencyState,
+  ConflictState,
+} from "@/components/feedback/app-states";
 import { Skeleton } from "@/components/feedback/loading-states";
 import { Drawer } from "@/components/ui/drawer";
 import { Dropdown, DropdownItem, DropdownSeparator } from "@/components/ui/dropdown";
@@ -240,13 +250,18 @@ export function DesignSystemCatalog() {
           </Table>
         </Section>
 
-        <Section title="بازخورد و بارگذاری" purpose="Empty و No Results باید متفاوت بمانند.">
-          <Alert tone="warning" title="توجه" description="Toast جایگزین خطای فیلد نیست." />
+        <Section title="بازخورد و بارگذاری" purpose="Empty و No Results باید متفاوت بمانند. Feature/Backend/Conflict جدا هستند.">
+          <Alert tone="warning" title="توجه" description="Toast جایگزین خطای فیلد، نشست منقضی، یا تأیید مخرب نیست." />
           <Grid columns={2}>
             <EmptyState />
             <NoResultsState />
             <ApiErrorState requestId="req_demo" />
             <SuccessState title="ثبت شد" description="این پیام نمایشی است." />
+            <PermissionDeniedState />
+            <SessionExpiredState />
+            <FeatureDisabledState />
+            <BackendDependencyState />
+            <ConflictState />
           </Grid>
           <Inline>
             <Skeleton variant="circle" />
@@ -277,6 +292,9 @@ export function DesignSystemCatalog() {
         open={confirmOpen}
         title="حذف شود؟"
         description="این عمل نیاز به تأیید صریح دارد."
+        consequence="پس از تأیید، بازگردانی ممکن نیست مگر Backend اجازه دهد."
+        confirmLabel="حذف"
+        variant="destructive"
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => setConfirmOpen(false)}
       />

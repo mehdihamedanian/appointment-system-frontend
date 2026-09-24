@@ -49,15 +49,19 @@ export function AppointmentCard({ item }: { item: AppointmentListItemView }) {
         {item.service.name}
       </h3>
       {when ? (
-        <p>
+        <p className="appointment-card__when">
           <time dateTime={item.startsAt}>{when.label}</time>
+          {item.durationMinutes ? (
+            <span className="text-caption"> · {formatDurationMinutes(item.durationMinutes)}</span>
+          ) : null}
         </p>
+      ) : item.durationMinutes ? (
+        <p className="appointment-card__when">{formatDurationMinutes(item.durationMinutes)}</p>
       ) : null}
-      {item.durationMinutes ? <p>{formatDurationMinutes(item.durationMinutes)}</p> : null}
-      {provider ? <p>{provider}</p> : null}
-      {item.branch ? <p>{item.branch.name}</p> : null}
-      <p className="text-caption">
-        کد رزرو: <span className="ltr-value">{item.publicReference}</span>
+      {provider ? <p className="appointment-card__provider">{provider}</p> : null}
+      {item.branch ? <p className="appointment-card__branch">{item.branch.name}</p> : null}
+      <p className="appointment-card__payment text-caption">
+        کد رزرو: <span className="ltr-value text-reference">{item.publicReference}</span>
       </p>
       <div className="appointment-card__actions">
         {showDetail ? (

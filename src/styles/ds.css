@@ -346,36 +346,46 @@
 
 .ds-calendar {
   width: min(20.5rem, 100%);
+  max-width: 100%;
   padding: var(--space-3);
   min-height: 22.5rem;
+  overflow-x: hidden;
 }
 
 .ds-calendar__nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
+  min-width: 0;
 }
 
 .ds-calendar__grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-1);
+  min-width: 0;
 }
 
 .ds-calendar__dow {
   text-align: center;
   font-size: var(--font-size-xs);
   color: var(--color-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ds-calendar__day {
   position: relative;
   min-height: var(--touch-target-min);
+  min-width: 0;
   border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   gap: 0;
+  font-size: clamp(0.75rem, 2.8vw, var(--font-size-sm));
 }
 
 .ds-calendar__day:disabled {
@@ -826,7 +836,9 @@
 .modal {
   display: flex;
   flex-direction: column;
+  width: min(100%, var(--modal-width, 32rem));
   max-height: min(90vh, 48rem);
+  max-height: min(90dvh, 48rem);
 }
 
 .modal__header {
@@ -840,6 +852,7 @@
 .modal__body {
   overflow: auto;
   min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal--xl {
@@ -868,6 +881,7 @@
   }
 }
 
+/* Below md (768px): stack stepper + page header; full-bleed dialogs on small screens. */
 @media (max-width: 767px) {
   .ds-stepper:not(.ds-stepper--vertical) {
     flex-direction: column;
@@ -875,5 +889,18 @@
 
   .ds-page-header {
     flex-direction: column;
+  }
+
+  .modal,
+  .modal--xl {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - var(--space-8));
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .ds-drawer--bottom {
+    max-height: min(92dvh, 100%);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
