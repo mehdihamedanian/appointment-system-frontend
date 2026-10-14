@@ -142,13 +142,23 @@ export type AdminResourceDetailView = {
 
 export type AdminResourceFormInput = {
   type: AdminResourceType;
+  /** Backend `resource_type_id`; required on create, never changed on edit. */
+  resourceTypeId?: string;
   name: string;
   description?: string;
   capacity?: number;
   branchId?: string;
-  scheduleMode?: AdminResourceScheduleMode;
-  customerVisible?: boolean;
   version?: string;
+};
+
+/** One row of `GET /resources/types`. */
+export type AdminResourceTypeOption = {
+  id: string;
+  code: string;
+  type: AdminResourceType;
+  label: string;
+  /** Staff/specialist types are created through the staff module, not the resource form. */
+  human: boolean;
 };
 
 export type AdminResourceImpactAction =

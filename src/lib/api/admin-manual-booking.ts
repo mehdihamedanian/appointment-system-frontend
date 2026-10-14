@@ -5,15 +5,23 @@ import {
   adaptAdminCustomerSearch,
   adaptAdminManualBookingConfirm,
   adaptAdminManualBookingOptions,
-  adaptAdminManualBookingQuote,
   adaptAdminResourceAllocation,
+  adaptBackendResourceAllocation,
 } from "@/lib/admin/manual-booking-adapter";
 import { adminManualBookingIntentFingerprint } from "@/lib/admin/manual-booking-draft";
-import { adaptBookableDates, adaptBookableSlots } from "@/lib/booking/adapters";
+import {
+  adaptServiceAvailabilityDates,
+  adaptServiceAvailabilitySlots,
+  pricedAtBookingQuote,
+} from "@/lib/booking/adapters";
 import { bookingProviderId } from "@/lib/public/provider-preference";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { queryKeys } from "@/lib/query/keys";
 import { canQueryAvailability } from "@/lib/availability/context";
+import { calendarMonthBounds, isCalendarMonthKey } from "@/lib/date-time/calendar-adapter";
+import { toE164IranMobile } from "@/lib/auth/phone";
+import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
+import { isRecord, readString } from "@/lib/utilities/records";
 import type {
   AdminManualBookingConfirmView,
   AdminManualBookingCreateCustomerInput,
@@ -25,10 +33,51 @@ import type {
   AdminResourceAllocationView,
 } from "@/types/admin-manual-booking";
 import type { BookableDatesView, BookableSlotsView } from "@/types/booking";
+import type { PublicBranch } from "@/types/public";
 import type { ProviderPreference, ProviderSelectionMode } from "@/types/provider";
 
 const AVAILABILITY_STALE_MS = 10_000;
 const SEARCH_MIN_LENGTH = 2;
+/** Qualified staff read per service when deriving branches; one detail request each. */
+const BRANCH_SOURCE_STAFF_LIMIT = 50;
+
+/**
+ * The Backend has no branch list. For staff, `GET /staff?service_id=` lists the staff
+ * qualified for the service and each `StaffRead.branches` names their branches, so the
+ * union of active ones is where the service can be staffed. Availability still decides
+ * whether a branch has slots.
+ */
+export async function fetchAdminServiceBranches(
+  serviceId: string,
+  signal?: AbortSignal,
+): Promise<PublicBranch[]> {
+  const listed = await apiClient<unknown>("/staff", {
+    method: "GET",
+    signal,
+    query: { service_id: serviceId, is_active: "true", page_size: BRANCH_SOURCE_STAFF_LIMIT },
+  });
+  const staffIds = asList(unwrapPayload(listed), ["items"])
+    .map((item) => (isRecord(item) ? readString(item.id) : undefined))
+    .filter((id): id is string => Boolean(id && isSafePublicId(id)));
+  const details = await Promise.all(
+    staffIds.map((id) =>
+      apiClient<unknown>(`/staff/${encodeURIComponent(id)}`, { method: "GET", signal }),
+    ),
+  );
+  const branches = new Map<string, PublicBranch>();
+  for (const detail of details) {
+    const root = unwrapPayload(detail);
+    for (const branch of isRecord(root) ? asList(root.branches, []) : []) {
+      if (!isRecord(branch) || readBoolean(branch.is_active) === false) continue;
+      const id = readString(branch.id);
+      const name = asSafeText(branch.name);
+      if (id && name && isSafePublicId(id) && !branches.has(id)) {
+        branches.set(id, { id, name, workingHours: [] });
+      }
+    }
+  }
+  return [...branches.values()];
+}
 
 const emptyDates = (reason: BookableDatesView["unavailableReason"]): BookableDatesView => ({
   available: false,
@@ -82,7 +131,7 @@ export async function searchAdminCustomers(
   const payload = await apiClient<unknown>("/admin/customers/search", {
     method: "GET",
     signal,
-    query: { q: query.trim() },
+    query: { search: query.trim() },
   });
   return adaptAdminCustomerSearch(payload, query.trim());
 }
@@ -97,7 +146,12 @@ export async function createAdminCustomer(
       method: "POST",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: input,
+      body: {
+        first_name: input.firstName,
+        last_name: input.lastName,
+        mobile: toE164IranMobile(input.phone),
+        ...(input.email ? { email: input.email } : {}),
+      },
     });
     return adaptAdminCreateCustomerResult(payload);
   } catch (error) {
@@ -136,20 +190,28 @@ export async function fetchAdminBookableDates(
   },
   signal?: AbortSignal,
 ): Promise<BookableDatesView> {
+  if (!input.branchId) {
+    return emptyDates("branch_required");
+  }
+  const bounds = calendarMonthBounds(input.month);
+  if (!bounds) {
+    return emptyDates("error");
+  }
   try {
-    const payload = await apiClient<unknown>("/admin/bookings/availability/dates", {
-      method: "GET",
-      signal,
-      query: {
-        customerId: input.customerId,
-        serviceId: input.serviceId,
-        branchId: input.branchId,
-        providerId: bookingProviderId(input.preference),
-        preference: input.preference.type,
-        month: input.month,
+    const payload = await apiClient<unknown>(
+      `/services/${encodeURIComponent(input.serviceId)}/availability`,
+      {
+        method: "GET",
+        signal,
+        query: {
+          branch_id: input.branchId,
+          from: bounds.from,
+          to: bounds.to,
+          staff_id: bookingProviderId(input.preference),
+        },
       },
-    });
-    return adaptBookableDates(payload);
+    );
+    return adaptServiceAvailabilityDates(payload);
   } catch (error) {
     if (isNotFoundError(toAppApiError(error))) {
       return emptyDates("missing_endpoint");
@@ -168,20 +230,23 @@ export async function fetchAdminBookableSlots(
   },
   signal?: AbortSignal,
 ): Promise<BookableSlotsView> {
+  if (!input.branchId) {
+    return emptySlots("branch_required");
+  }
   try {
-    const payload = await apiClient<unknown>("/admin/bookings/availability/slots", {
-      method: "GET",
-      signal,
-      query: {
-        customerId: input.customerId,
-        serviceId: input.serviceId,
-        branchId: input.branchId,
-        providerId: bookingProviderId(input.preference),
-        preference: input.preference.type,
-        date: input.date,
+    const payload = await apiClient<unknown>(
+      `/services/${encodeURIComponent(input.serviceId)}/availability`,
+      {
+        method: "GET",
+        signal,
+        query: {
+          branch_id: input.branchId,
+          date: input.date,
+          staff_id: bookingProviderId(input.preference),
+        },
       },
-    });
-    return adaptBookableSlots(payload);
+    );
+    return adaptServiceAvailabilitySlots(payload, input.date);
   } catch (error) {
     if (isNotFoundError(toAppApiError(error))) {
       return emptySlots("missing_endpoint");
@@ -190,26 +255,32 @@ export async function fetchAdminBookableSlots(
   }
 }
 
+/** Staff requirements are filled by the provider step (`staff_id`), not chosen here. */
 export async function fetchAdminResourceAllocation(
-  draft: AdminManualBookingDraft,
+  { serviceId, branchId }: Pick<AdminManualBookingDraft, "serviceId" | "branchId">,
   signal?: AbortSignal,
 ): Promise<AdminResourceAllocationView> {
+  if (!serviceId) return adaptAdminResourceAllocation(undefined);
+  const base = `/admin/services/${encodeURIComponent(serviceId)}/resource-requirements`;
   try {
-    const payload = await apiClient<unknown>("/admin/bookings/allocation", {
-      method: "POST",
-      signal,
-      body: {
-        customerId: draft.customerId,
-        serviceId: draft.serviceId,
-        branchId: draft.branchId,
-        providerPreference: draft.providerPreference,
-        date: draft.date,
-        slotId: draft.slotId,
-        allocationMode: draft.allocationMode,
-        resourceSelections: draft.resourceSelections,
-      },
-    });
-    return adaptAdminResourceAllocation(payload);
+    const payload = await apiClient<unknown>(base, { method: "GET", signal });
+    const requirements = asList(unwrapPayload(payload), ["requirements", "items"]).filter(
+      (item) => isRecord(item) && readString(item.resource_type_code) !== "staff" && readString(item.id),
+    ) as Record<string, unknown>[];
+    const entries = await Promise.all(
+      requirements.map(async (requirement) => {
+        const eligible = await apiClient<unknown>(
+          `${base}/${encodeURIComponent(String(requirement.id))}/eligible-resources`,
+          {
+            method: "GET",
+            signal,
+            query: { active_only: "true", ...(branchId ? { branch_id: branchId } : {}) },
+          },
+        );
+        return { requirement, resources: asList(unwrapPayload(eligible), ["resources", "items"]) };
+      }),
+    );
+    return adaptBackendResourceAllocation(entries);
   } catch (error) {
     if (isNotFoundError(toAppApiError(error))) {
       return adaptAdminResourceAllocation(undefined);
@@ -218,16 +289,12 @@ export async function fetchAdminResourceAllocation(
   }
 }
 
-export async function fetchAdminManualBookingQuote(
-  draft: AdminManualBookingDraft,
-  signal?: AbortSignal,
-): Promise<AdminManualBookingQuoteView> {
-  const payload = await apiClient<unknown>("/admin/bookings/quote", {
-    method: "POST",
-    signal,
-    body: quoteRequestBody(draft),
-  });
-  return adaptAdminManualBookingQuote(payload);
+/**
+ * The Backend has no manual-booking quote route: `POST /admin/appointments` prices the
+ * appointment itself, so nothing is requested or calculated here.
+ */
+export async function fetchAdminManualBookingQuote(): Promise<AdminManualBookingQuoteView> {
+  return { ...pricedAtBookingQuote(), paymentOptions: [] };
 }
 
 export async function confirmAdminManualBooking(
@@ -287,7 +354,7 @@ export function adminBookableDatesQueryOptions(
         requiresBranch: gates.requiresBranch,
         providerMode: gates.providerMode,
       }) &&
-      /^\d{4}-\d{2}$/.test(month),
+      isCalendarMonthKey(month),
     ...availabilityQueryBase,
   };
 }
@@ -333,7 +400,7 @@ export function adminManualBookingQuoteQueryOptions(
   const fingerprint = adminManualBookingIntentFingerprint(draft);
   return {
     queryKey: queryKeys.admin.manualBookingQuote(userId, fingerprint),
-    queryFn: ({ signal }: { signal: AbortSignal }) => fetchAdminManualBookingQuote(draft, signal),
+    queryFn: () => fetchAdminManualBookingQuote(),
     enabled:
       enabled &&
       isSafePublicId(draft.customerId) &&

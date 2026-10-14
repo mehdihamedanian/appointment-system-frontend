@@ -1,4 +1,4 @@
-import { formatCurrencyAmount } from "@/lib/date-time/format";
+import { formatCurrencyAmount, formatDecimalAmount } from "@/lib/date-time/format";
 import { appointmentProviderLabel } from "@/lib/customer/appointment-detail-adapter";
 import { isInternalResource } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
@@ -71,7 +71,8 @@ function adaptRefundStatus(value: unknown): CancellationRefundStatus {
 }
 
 function adaptRefund(root: Record<string, unknown>): CancellationRefundView {
-  const source = isRecord(root.refund) && !isInternalResource(root.refund) ? root.refund : root;
+  const nested = isRecord(root.refund) && !isInternalResource(root.refund) ? root.refund : undefined;
+  const source = nested ?? root;
   const currency = readString(source.currency) ?? readString(root.currency);
   const paid = moneyLabel(source.paidAmount ?? source.paid ?? root.paidAmountLabel, currency);
   const fee = moneyLabel(
@@ -83,7 +84,8 @@ function adaptRefund(root: Record<string, unknown>): CancellationRefundView {
     currency,
   );
   return {
-    status: adaptRefundStatus(source.status ?? source.refundStatus ?? root.refundStatus),
+    // Without a refund object, `status` is the appointment's own status, not a refund state.
+    status: adaptRefundStatus(nested?.status ?? source.refundStatus ?? root.refundStatus),
     paidAmount: paid ? { label: paid } : undefined,
     cancellationFee: fee ? { label: fee } : undefined,
     refundableAmount: refundable ? { label: refundable } : undefined,
@@ -96,6 +98,23 @@ function adaptRefund(root: Record<string, unknown>): CancellationRefundView {
       asSafeText(source.estimateLabel) ??
       asSafeText(source.processingTime),
     note: asSafeText(source.note) ?? asSafeText(source.disclaimer),
+  };
+}
+
+/** Backend `RefundCalculationSummary`; the refund itself is executed separately by the business. */
+function adaptBackendRefund(source: unknown, currency?: string): CancellationRefundView | undefined {
+  if (!isRecord(source) || readBoolean(source.refund_eligible) === undefined) {
+    return undefined;
+  }
+  const refundable = formatDecimalAmount(source.calculated_refund_amount, currency);
+  if (source.refund_eligible !== true || !refundable || !(Number(source.calculated_refund_amount) > 0)) {
+    return { status: "none" };
+  }
+  const paid = formatDecimalAmount(source.calculation_base, currency);
+  return {
+    status: source.payment_execution_required === true ? "processing" : "pending_calculation",
+    refundableAmount: { label: refundable },
+    paidAmount: paid ? { label: paid } : undefined,
   };
 }
 
@@ -159,11 +178,16 @@ function adaptAppointmentSnapshot(root: Record<string, unknown>): CancellationAp
     publicId(source.publicReference) ??
     publicId(source.reference) ??
     publicId(source.bookingReference) ??
+    publicId(source.booking_reference) ??
     publicId(source.id);
   const serviceSource = isRecord(source.service) && !isInternalResource(source.service) ? source.service : undefined;
-  const serviceName = asSafeText(serviceSource?.name) ?? asSafeText(source.serviceName);
+  const serviceName =
+    asSafeText(serviceSource?.name) ??
+    asSafeText(serviceSource?.title) ??
+    asSafeText(source.serviceName);
   const startsAt =
     readString(source.startsAt) ??
+    readString(source.starts_at) ??
     readString(source.startAt) ??
     readString(source.scheduledAt);
   const status = parseStatusKey(source.status) ?? parseStatusKey(source.appointmentStatus);
@@ -181,16 +205,20 @@ function adaptAppointmentSnapshot(root: Record<string, unknown>): CancellationAp
   const branchSource = isRecord(source.branch) && !isInternalResource(source.branch) ? source.branch : undefined;
   const branchName = asSafeText(branchSource?.name) ?? asSafeText(source.branchName);
   if (branchName) snapshot.branchName = branchName;
-  const endsAt = readString(source.endsAt) ?? readString(source.endAt);
+  const endsAt = readString(source.endsAt) ?? readString(source.ends_at) ?? readString(source.endAt);
   if (endsAt) snapshot.endsAt = endsAt;
   const timezone = readString(source.timezone) ?? readString(source.timeZone);
   if (timezone) snapshot.timezone = timezone;
-  const duration = readNumber(source.durationMinutes) ?? readNumber(serviceSource?.durationMinutes);
+  const duration =
+    readNumber(source.durationMinutes) ??
+    readNumber(source.duration_snapshot) ??
+    readNumber(serviceSource?.durationMinutes);
   if (typeof duration === "number" && Number.isInteger(duration) && duration > 0) {
     snapshot.durationMinutes = duration;
   }
   const paymentStatus =
     parseStatusKey(source.paymentStatus) ??
+    parseStatusKey(source.payment_status) ??
     parseStatusKey(isRecord(source.payment) ? source.payment.status : undefined);
   if (paymentStatus) snapshot.paymentStatus = paymentStatus;
   return snapshot;
@@ -226,10 +254,12 @@ export function adaptCancellationPreview(payload: unknown): CancellationPreviewV
     return null;
   }
   const nested = isRecord(root.preview) ? root.preview : root;
-  const explicit = readBoolean(nested.canCancel) !== undefined || readBoolean(root.canCancel) !== undefined;
-  const canCancel = explicit
-    ? readBoolean(nested.canCancel) === true || readBoolean(root.canCancel) === true
-    : false;
+  const actions = isRecord(root.actions) ? root.actions : {};
+  const canCancel =
+    readBoolean(nested.canCancel) === true ||
+    readBoolean(root.canCancel) === true ||
+    readBoolean(actions.canCancel) === true ||
+    readBoolean(actions.can_cancel) === true;
   const preview: CancellationPreviewView = {
     appointment,
     canCancel,
@@ -271,23 +301,31 @@ export function adaptCancellationResult(payload: unknown): CancellationResultVie
   if (!isRecord(root) || isInternalResource(root)) {
     return null;
   }
+  const appointment = isRecord(root.appointment) ? root.appointment : undefined;
   const appointmentReference =
     publicId(root.appointmentReference) ??
     publicId(root.publicReference) ??
     publicId(root.reference) ??
     publicId(root.bookingReference) ??
-    publicId(isRecord(root.appointment) ? root.appointment.publicReference : undefined);
-  const status = parseStatusKey(root.status) ?? parseStatusKey(root.appointmentStatus) ?? "cancelled";
+    publicId(appointment?.publicReference) ??
+    publicId(appointment?.booking_reference);
+  const status =
+    parseStatusKey(root.status) ??
+    parseStatusKey(root.appointmentStatus) ??
+    parseStatusKey(appointment?.status) ??
+    "cancelled";
   if (!appointmentReference) {
     return null;
   }
+  const currency = isRecord(appointment?.payment) ? readString(appointment.payment.currency) : undefined;
   const result: CancellationResultView = {
     appointmentReference,
     status,
-    refund: adaptRefund(root),
+    refund: adaptBackendRefund(root.refund, currency) ?? adaptRefund(root),
   };
   const cancelledAt =
     readString(root.cancelledAt) ??
+    readString(root.cancelled_at) ??
     readString(root.canceledAt) ??
     readString(root.completedAt);
   if (cancelledAt) result.cancelledAt = cancelledAt;

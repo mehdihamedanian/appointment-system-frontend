@@ -84,8 +84,14 @@ export function adaptCustomerProfile(payload: unknown): CustomerProfileView | nu
     return null;
   }
 
-  const firstName = asSafeText(source.firstName) ?? asSafeText(source.givenName);
-  const lastName = asSafeText(source.lastName) ?? asSafeText(source.familyName);
+  const firstName =
+    asSafeText(source.firstName) ??
+    asSafeText(source.first_name) ??
+    asSafeText(source.givenName);
+  const lastName =
+    asSafeText(source.lastName) ??
+    asSafeText(source.last_name) ??
+    asSafeText(source.familyName);
   const composedName = [firstName, lastName].filter(Boolean).join(" ");
   const displayName =
     asSafeText(source.displayName) ??

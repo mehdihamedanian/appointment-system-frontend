@@ -42,6 +42,47 @@ describe("session restoration", () => {
 
     await expect(fetchSession()).resolves.toMatchObject({ status: "expired" });
   });
+
+  it("derives admin panel access from the Backend user summary", async () => {
+    mockedClient.mockResolvedValueOnce({
+      success: true,
+      data: {
+        user: {
+          id: "user_owner",
+          first_name: "Owner",
+          last_name: "Admin",
+          mobile: "+989121234567",
+          account_type: "internal",
+          roles: ["owner"],
+        },
+      },
+    });
+    await expect(fetchSession()).resolves.toMatchObject({
+      status: "authenticated",
+      user: {
+        id: "user_owner",
+        displayName: "Owner Admin",
+        adminPanelAccess: "granted",
+        permissionCodes: [],
+      },
+    });
+
+    mockedClient.mockResolvedValueOnce({
+      data: { user: { id: "user_customer", account_type: "customer", roles: ["customer"] } },
+    });
+    await expect(fetchSession()).resolves.toMatchObject({
+      user: { adminPanelAccess: "denied" },
+    });
+  });
+
+  it("does not trigger the global unauthorized handler for the session probe", async () => {
+    mockedClient.mockResolvedValueOnce({ user: { id: "user_1" } });
+    await fetchSession();
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/auth/session",
+      expect.objectContaining({ notifyUnauthorized: false }),
+    );
+  });
 });
 
 describe("otp challenge adapter", () => {

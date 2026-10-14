@@ -15,6 +15,38 @@ const base = {
 };
 
 describe("booking confirmation adapter", () => {
+  it("reads the Backend's CustomerAppointmentDetail amounts and pay permission as given", () => {
+    const detail = {
+      id: "6f1c1d2e-0000-4000-8000-000000000001",
+      booking_reference: "BK7Q2M",
+      service: { id: "svc_1", title: "ویزیت" },
+      starts_at: "2026-08-22T10:00:00+03:30",
+      status: "pending",
+      payment_status: "unpaid",
+      price_snapshot: "150000.00",
+      payment: {
+        payment_status: "unpaid",
+        currency: "IRR",
+        total_amount: "150000.00",
+        successful_paid_amount: "0.00",
+        outstanding_balance: "150000.00",
+      },
+      actions: { can_cancel: true, can_reschedule: true, can_repeat: false, can_pay: true },
+    };
+    const view = adaptBookingConfirmation({ appointment: detail });
+    expect(view?.reference).toBe("BK7Q2M");
+    expect(view?.pricing.totalLabel).toMatch(/۱۵۰٬۰۰۰/);
+    expect(view?.pricing.remainingLabel).toMatch(/۱۵۰٬۰۰۰/);
+    expect(view?.payHref).toBe("/appointments/BK7Q2M/payment");
+
+    const notPayable = adaptBookingConfirmation({
+      ...detail,
+      actions: { ...detail.actions, can_pay: false },
+    });
+    expect(notPayable?.payHref).toBeUndefined();
+    expect(adaptBookingConfirmation({ ...detail, actions: null })?.payHref).toBeUndefined();
+  });
+
   it("maps a confirmed booking without calculating money", () => {
     const view = adaptBookingConfirmation({
       ...base,

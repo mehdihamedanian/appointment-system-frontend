@@ -2,7 +2,7 @@ import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/rea
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { isInternalResource, readId } from "@/lib/public/adapters";
 import { isRecord, readString } from "@/lib/utilities/records";
-import { formatAppointmentParts, formatCurrencyAmount } from "@/lib/date-time/format";
+import { formatAppointmentParts, formatCurrencyAmount, formatDecimalAmount } from "@/lib/date-time/format";
 import { adaptCoupon, adaptPaymentOptions } from "@/lib/payment/adapter";
 import type {
   AdditionalFieldDefinition,
@@ -274,6 +274,116 @@ export function adaptBookableSlots(payload: unknown): BookableSlotsView {
   return view;
 }
 
+type ServiceAvailabilityDay = { date: string; slots: Array<{ start: string; end?: string }> };
+
+function readServiceAvailability(payload: unknown): {
+  timezone?: string;
+  configurationValid: boolean;
+  days: ServiceAvailabilityDay[];
+} {
+  const root = unwrapPayload(payload);
+  const source = isRecord(root) ? root : {};
+  const days: ServiceAvailabilityDay[] = [];
+  for (const item of asList(source.days, [])) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const date = readString(item.date);
+    if (!date || !isIsoDate(date)) {
+      continue;
+    }
+    const slots = asList(item.slots, [])
+      .map((slot) => {
+        if (!isRecord(slot)) {
+          return null;
+        }
+        const start = readString(slot.start);
+        return start ? { start, end: readString(slot.end) } : null;
+      })
+      .filter((slot): slot is { start: string; end: string | undefined } => Boolean(slot));
+    days.push({ date, slots });
+  }
+  return {
+    timezone: readString(source.timezone),
+    configurationValid: readBoolean(source.configuration_valid) !== false,
+    days,
+  };
+}
+
+/** Backend slots have no identifier; the start instant is the stable key. */
+export function serviceAvailabilitySlotId(start: string): string | undefined {
+  const epoch = Date.parse(start);
+  return Number.isFinite(epoch) ? `slot_${epoch}` : undefined;
+}
+
+/** Adapts `GET /services/{id}/availability` for a date range. */
+export function adaptServiceAvailabilityDates(payload: unknown): BookableDatesView {
+  const availability = readServiceAvailability(payload);
+  if (!availability.configurationValid) {
+    return {
+      available: false,
+      dates: [],
+      days: [],
+      timezone: availability.timezone,
+      unavailableReason: "not_configured",
+    };
+  }
+  const days: BookableDateDay[] = availability.days.map((day) => ({
+    date: day.date,
+    status: day.slots.length > 0 ? "available" : "unavailable",
+  }));
+  const dates = days.filter((day) => day.status === "available").map((day) => day.date);
+  const view: BookableDatesView = {
+    available: dates.length > 0,
+    dates,
+    days,
+    unavailableReason: dates.length === 0 ? "empty" : undefined,
+  };
+  if (availability.timezone) {
+    view.timezone = availability.timezone;
+  }
+  return view;
+}
+
+/** Adapts `GET /services/{id}/availability?date=` into selectable slots. */
+export function adaptServiceAvailabilitySlots(payload: unknown, date: string): BookableSlotsView {
+  const availability = readServiceAvailability(payload);
+  if (!availability.configurationValid) {
+    return {
+      available: false,
+      slots: [],
+      timezone: availability.timezone,
+      unavailableReason: "not_configured",
+    };
+  }
+  const day = availability.days.find((item) => item.date === date);
+  const slots: AvailableSlotView[] = [];
+  for (const slot of day?.slots ?? []) {
+    const id = serviceAvailabilitySlotId(slot.start);
+    const label = formatAppointmentParts(slot.start, availability.timezone)?.time;
+    if (!id || !label) {
+      continue;
+    }
+    const view: AvailableSlotView = { id, startsAt: slot.start, label, status: "available" };
+    if (slot.end) {
+      view.endsAt = slot.end;
+    }
+    slots.push(view);
+  }
+  const view: BookableSlotsView = {
+    available: slots.length > 0,
+    slots,
+    timezone: availability.timezone,
+    unavailableReason: slots.length === 0 ? "empty" : undefined,
+  };
+  const root = unwrapPayload(payload);
+  const joinAllowed = isRecord(root) ? readBoolean(root.waitingListJoinAllowed) : undefined;
+  if (joinAllowed !== undefined) {
+    view.waitingListJoinAllowed = joinAllowed;
+  }
+  return view;
+}
+
 function adaptCheckoutPath(value: unknown): CheckoutPath {
   const raw = readString(value)?.toLowerCase().replace(/[\s-]+/g, "_");
   return (raw && CHECKOUT_PATHS[raw]) || "unknown";
@@ -388,13 +498,27 @@ export function emptyBookingQuote(): BookingQuoteView {
   };
 }
 
+function isZeroDecimal(value: unknown): boolean {
+  return typeof value === "string" && /^0+(\.0+)?$/.test(value.trim());
+}
+
+/** No amounts: the Backend decides price and payment requirement when the appointment is created. */
+export function pricedAtBookingQuote(): BookingQuoteView {
+  return {
+    ...emptyBookingQuote(),
+    checkoutPath: "confirm",
+    pricedAtBooking: true,
+  };
+}
+
 export function adaptBookingQuote(payload: unknown): BookingQuoteView {
   const root = unwrapPayload(payload);
   if (!isRecord(root)) {
     return emptyBookingQuote();
   }
   const pricingRoot = isRecord(root.pricing) ? root.pricing : root;
-  const currency = readString(pricingRoot.currency) ?? readString(root.currency);
+  const currency =
+    readString(pricingRoot.currency) ?? readString(root.currency) ?? readString(root.currency_code);
   const checkoutPathHint = adaptCheckoutPath(
     root.checkoutPath ?? root.paymentPath ?? root.confirmationMode ?? root.paymentMode,
   );
@@ -425,18 +549,20 @@ export function adaptBookingQuote(payload: unknown): BookingQuoteView {
   if (timezone) quote.timezone = timezone;
 
   const priceLabel =
-    adaptMoneyLabel(pricingRoot.baseAmount ?? pricingRoot.priceLabel ?? root.priceLabel ?? root.amountLabel, currency);
+    adaptMoneyLabel(pricingRoot.baseAmount ?? pricingRoot.priceLabel ?? root.priceLabel ?? root.amountLabel, currency) ??
+    formatDecimalAmount(root.original_amount, currency);
   if (priceLabel) quote.priceLabel = priceLabel;
   const depositLabel = adaptMoneyLabel(pricingRoot.depositAmount ?? root.depositLabel, currency);
   if (depositLabel) quote.depositLabel = depositLabel;
-  const discountLabel = adaptMoneyLabel(pricingRoot.discountAmount ?? root.discountLabel, currency);
+  const discountLabel =
+    adaptMoneyLabel(pricingRoot.discountAmount ?? root.discountLabel, currency) ??
+    (isZeroDecimal(root.discount_amount) ? undefined : formatDecimalAmount(root.discount_amount, currency));
   if (discountLabel) quote.discountLabel = discountLabel;
   const taxLabel = adaptMoneyLabel(pricingRoot.taxAmount ?? root.taxLabel, currency);
   if (taxLabel) quote.taxLabel = taxLabel;
-  const totalLabel = adaptMoneyLabel(
-    pricingRoot.totalAmount ?? root.finalAmountLabel ?? root.totalLabel,
-    currency,
-  );
+  const totalLabel =
+    adaptMoneyLabel(pricingRoot.totalAmount ?? root.finalAmountLabel ?? root.totalLabel, currency) ??
+    formatDecimalAmount(root.final_amount, currency);
   if (totalLabel) quote.finalAmountLabel = totalLabel;
   const payableNowLabel = adaptMoneyLabel(
     pricingRoot.payableNow ?? root.payableNowLabel ?? root.payableLabel,
@@ -529,14 +655,28 @@ export function adaptBookingConfirm(payload: unknown): BookingConfirmView {
   if (!isRecord(root)) {
     return { outcome: "missing_endpoint" };
   }
-  const status = readString(root.status ?? root.outcome ?? root.result)?.toLowerCase().replace(/[\s-]+/g, "_");
+  const appointment = isRecord(root.appointment) ? root.appointment : root;
+  const status = readString(
+    appointment.status ?? root.status ?? root.outcome ?? root.result,
+  )
+    ?.toLowerCase()
+    .replace(/[\s-]+/g, "_");
   const quote =
     root.quote !== undefined || root.changed === true ? adaptBookingQuote(root.quote ?? root) : undefined;
   if (quote?.changed || status === "quote_changed" || status === "price_changed") {
     return { outcome: "quote_changed", quote };
   }
-  const bookingId = readId(root) ?? readString(root.bookingId) ?? readString(root.appointmentId);
-  const reference = asSafeText(root.reference) ?? (bookingId && isSafePublicId(bookingId) ? bookingId : undefined);
+  const bookingId =
+    readId(appointment) ??
+    readString(appointment.booking_reference) ??
+    readString(appointment.bookingReference) ??
+    readString(root.bookingId) ??
+    readString(root.appointmentId);
+  const reference =
+    asSafeText(appointment.booking_reference) ??
+    asSafeText(appointment.bookingReference) ??
+    asSafeText(root.reference) ??
+    (bookingId && isSafePublicId(bookingId) ? bookingId : undefined);
   const holdId = readString(root.holdId);
   const paymentRequired =
     status === "payment_required" ||

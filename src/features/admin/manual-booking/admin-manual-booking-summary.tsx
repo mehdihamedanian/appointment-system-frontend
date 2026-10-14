@@ -1,5 +1,6 @@
 "use client";
 
+import { startTimeFromSlotId } from "@/lib/api/backend-contract";
 import { formatAppointmentParts, formatDurationMinutes } from "@/lib/date-time/format";
 import { providerPresentation } from "@/lib/booking/summary-display";
 import type { AdminManualBookingDraft, AdminManualBookingQuoteView } from "@/types/admin-manual-booking";
@@ -28,14 +29,10 @@ export function AdminManualBookingSummary({
   timezone?: string;
 }) {
   const provider = providerPresentation(draft.providerPreference, eligible);
+  const slotStart = quote?.slot?.startsAt ?? startTimeFromSlotId(draft.slotId);
   const slotLabel =
     quote?.slot?.label ??
-    (draft.date && draft.slotId
-      ? formatAppointmentParts(
-          `${draft.date}T00:00:00.000Z`,
-          timezone ?? quote?.timezone,
-        )?.time
-      : undefined);
+    (slotStart ? formatAppointmentParts(slotStart, timezone ?? quote?.timezone)?.time : undefined);
 
   return (
     <aside className="booking-summary admin-manual-booking-summary" aria-labelledby="admin-booking-summary-title">

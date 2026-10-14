@@ -108,7 +108,7 @@ export function ProviderSelector({
 
   if (loading) {
     return (
-      <div className="provider-selector" aria-busy="true" aria-label="در حال بارگذاری متخصصان">
+      <div className="provider-selector" role="status" aria-busy="true" aria-label="در حال بارگذاری متخصصان">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </div>

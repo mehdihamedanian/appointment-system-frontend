@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/feedback/loading-states";
 
 export function ServicesCatalogSkeleton() {
   return (
-    <div className="services-page" aria-busy="true" aria-label="در حال بارگذاری خدمات">
+    <div className="services-page" role="status" aria-busy="true" aria-label="در حال بارگذاری خدمات">
       <Skeleton variant="title" />
       <Skeleton variant="line-short" />
       <div className="public-card-grid">
@@ -16,7 +16,7 @@ export function ServicesCatalogSkeleton() {
 
 export function ServiceDetailSkeleton() {
   return (
-    <div className="service-detail" aria-busy="true" aria-label="در حال بارگذاری خدمت">
+    <div className="service-detail" role="status" aria-busy="true" aria-label="در حال بارگذاری خدمت">
       <Skeleton variant="title" />
       <Skeleton variant="line" />
       <Skeleton variant="card" />

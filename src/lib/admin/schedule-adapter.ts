@@ -373,6 +373,7 @@ export function adaptAdminScheduleView(
     allowedActions,
     capabilities,
     calendarHref: scheduleCalendarHref(scope, scopeReference),
+    weeklyReadOnlyReason: asSafeText(root.weeklyReadOnlyReason),
   };
 }
 

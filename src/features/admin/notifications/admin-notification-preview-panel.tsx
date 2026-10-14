@@ -6,14 +6,17 @@ import { asSafeText } from "@/lib/public/read";
 import type { AdminNotificationPreviewResult } from "@/types/admin-notification";
 import type { NotificationChannel } from "@/types/customer-profile";
 
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+
 function SafeHtmlPreview({ html, direction }: { html: string; direction?: string }) {
-  const safe = asSafeText(html) ?? "";
+  const safe = (asSafeText(html) ?? "").replace(/[&<>"]/g, (char) => HTML_ESCAPES[char] ?? char);
+  const dir = direction === "ltr" || direction === "auto" ? direction : "rtl";
   return (
     <iframe
       title="پیش‌نمایش ایمیل"
       className="admin-notification-preview__iframe"
       sandbox=""
-      srcDoc={`<!DOCTYPE html><html dir="${direction ?? "rtl"}"><body style="font-family:sans-serif;padding:16px;margin:0;">${safe.replace(/\n/g, "<br>")}</body></html>`}
+      srcDoc={`<!DOCTYPE html><html dir="${dir}"><body style="font-family:sans-serif;padding:16px;margin:0;">${safe.replace(/\n/g, "<br>")}</body></html>`}
     />
   );
 }

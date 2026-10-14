@@ -1,4 +1,8 @@
-import { formatAppointmentParts, formatCurrencyAmount } from "@/lib/date-time/format";
+import {
+  formatAppointmentParts,
+  formatCurrencyAmount,
+  formatDecimalAmount,
+} from "@/lib/date-time/format";
 import { appointmentProviderLabel } from "@/lib/customer/appointment-detail-adapter";
 import { isInternalResource } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
@@ -118,6 +122,16 @@ function adaptProvider(source: unknown): AppointmentProviderSnapshot | undefined
   return undefined;
 }
 
+/** Backend `staff: [{ staff_id, display_name }]`; only a single assignment maps to one provider. */
+function adaptAssignedStaff(value: unknown): AppointmentProviderSnapshot | undefined {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    return undefined;
+  }
+  const name = asSafeText(value[0].display_name) ?? asSafeText(value[0].displayName);
+  const id = publicId(value[0].staff_id) ?? publicId(value[0].staffId);
+  return name ? { mode: "specific", name, id } : undefined;
+}
+
 function adaptPolicy(source: unknown, fallbackTitle?: string): PolicySnapshot {
   if (!isRecord(source) || isInternalResource(source)) {
     return fallbackTitle ? { title: fallbackTitle } : {};
@@ -189,14 +203,17 @@ function adaptAppointmentSnapshot(root: Record<string, unknown>): RescheduleAppo
     publicId(source.publicReference) ??
     publicId(source.reference) ??
     publicId(source.bookingReference) ??
+    publicId(source.booking_reference) ??
     publicId(source.id);
   const serviceId =
     publicId(isRecord(source.service) ? source.service.id : undefined) ??
     publicId(source.serviceId);
   const serviceSource = isRecord(source.service) && !isInternalResource(source.service) ? source.service : undefined;
-  const serviceName = asSafeText(serviceSource?.name) ?? asSafeText(source.serviceName);
+  const serviceName =
+    asSafeText(serviceSource?.name) ?? asSafeText(serviceSource?.title) ?? asSafeText(source.serviceName);
   const startsAt =
     readString(source.startsAt) ??
+    readString(source.starts_at) ??
     readString(source.startAt) ??
     readString(source.scheduledAt);
   const status = parseStatusKey(source.status) ?? parseStatusKey(source.appointmentStatus);
@@ -210,25 +227,28 @@ function adaptAppointmentSnapshot(root: Record<string, unknown>): RescheduleAppo
     serviceName,
     startsAt,
   };
-  const provider = adaptProvider(source.provider ?? source.assignedProvider);
+  const provider =
+    adaptProvider(source.provider ?? source.assignedProvider) ?? adaptAssignedStaff(source.staff);
   if (provider) snapshot.provider = provider;
   const branchSource = isRecord(source.branch) && !isInternalResource(source.branch) ? source.branch : undefined;
   const branchId = publicId(branchSource?.id) ?? publicId(source.branchId);
   const branchName = asSafeText(branchSource?.name) ?? asSafeText(source.branchName);
   if (branchId) snapshot.branchId = branchId;
   if (branchName) snapshot.branchName = branchName;
-  const endsAt = readString(source.endsAt) ?? readString(source.endAt);
+  const endsAt = readString(source.endsAt) ?? readString(source.ends_at) ?? readString(source.endAt);
   if (endsAt) snapshot.endsAt = endsAt;
   const timezone = readString(source.timezone) ?? readString(source.timeZone);
   if (timezone) snapshot.timezone = timezone;
   const duration =
     readNumber(source.durationMinutes) ??
+    readNumber(source.duration_snapshot) ??
     readNumber(serviceSource?.durationMinutes);
   if (typeof duration === "number" && Number.isInteger(duration) && duration > 0) {
     snapshot.durationMinutes = duration;
   }
   const paymentStatus =
     parseStatusKey(source.paymentStatus) ??
+    parseStatusKey(source.payment_status) ??
     parseStatusKey(isRecord(source.payment) ? source.payment.status : undefined);
   if (paymentStatus) snapshot.paymentStatus = paymentStatus;
   return snapshot;
@@ -249,7 +269,9 @@ function adaptSelectionContext(root: Record<string, unknown>, appointment: Resch
   const preference =
     nested.providerPreference !== undefined
       ? adaptProviderPreference(nested.providerPreference)
-      : appointment.provider?.id
+      : providerMode === "not_applicable"
+        ? ({ type: "not_applicable" } as const)
+        : appointment.provider?.id
         ? { type: "specific" as const, providerId: appointment.provider.id }
         : appointment.provider?.mode === "pending_assignment"
           ? ({ type: "any" } as const)
@@ -334,11 +356,12 @@ export function adaptReschedulePreview(payload: unknown): ReschedulePreviewView 
     return null;
   }
   const nested = isRecord(root.preview) ? root.preview : root;
-  const explicit =
-    readBoolean(nested.canReschedule) !== undefined || readBoolean(root.canReschedule) !== undefined;
-  const canReschedule = explicit
-    ? readBoolean(nested.canReschedule) === true || readBoolean(root.canReschedule) === true
-    : false;
+  const actions = isRecord(root.actions) ? root.actions : {};
+  const canReschedule =
+    readBoolean(nested.canReschedule) === true ||
+    readBoolean(root.canReschedule) === true ||
+    readBoolean(actions.canReschedule) === true ||
+    readBoolean(actions.can_reschedule) === true;
   const preview: ReschedulePreviewView = {
     appointment,
     canReschedule,
@@ -407,10 +430,85 @@ export function adaptRescheduleQuote(payload: unknown): RescheduleQuoteView | nu
   return quote;
 }
 
+/**
+ * The Backend has no reschedule quote: the review pairs the freshly read appointment with the chosen
+ * slot, and the price change is only known from the reschedule response.
+ */
+export function buildRescheduleReview(
+  preview: ReschedulePreviewView,
+  input: { slotId: string; date: string; startsAt: string },
+): RescheduleQuoteView {
+  const proposed: RescheduleProposedSnapshot = {
+    slotId: input.slotId,
+    date: input.date,
+    startsAt: input.startsAt,
+  };
+  const when = formatAppointmentParts(input.startsAt, preview.selection.timezone);
+  if (when?.time) proposed.timeLabel = when.time;
+  const review: RescheduleQuoteView = {
+    current: preview.appointment,
+    proposed,
+    financial: {
+      status: "pending_calculation",
+      note: "تغییر احتمالی مبلغ پس از ثبت زمان جدید توسط سرویس نوبت‌دهی اعلام می‌شود.",
+    },
+    policy: preview.policy,
+  };
+  if (preview.previewVersion) review.previewVersion = preview.previewVersion;
+  if (preview.requiresAcknowledgment) review.requiresAcknowledgment = true;
+  if (preview.acknowledgmentLabel) review.acknowledgmentLabel = preview.acknowledgmentLabel;
+  return review;
+}
+
+/** Backend `CustomerAppointmentRescheduleResponse`: the replacement appointment is the new booking. */
+function adaptBackendRescheduleResult(root: Record<string, unknown>): RescheduleResultView | null {
+  const replacement = root.replacement_appointment;
+  if (!isRecord(replacement)) {
+    return null;
+  }
+  const appointmentReference = publicId(replacement.booking_reference);
+  const startsAt = readString(replacement.starts_at);
+  if (!appointmentReference || !startsAt) {
+    return null;
+  }
+  const payment = isRecord(replacement.payment) ? replacement.payment : {};
+  const currency = readString(payment.currency);
+  const difference = Number(root.price_difference);
+  const outstanding = Number(payment.outstanding_balance);
+  const financial: RescheduleFinancialAdjustment = {
+    status: outstanding > 0 && difference > 0 ? "additional_payment" : "none",
+  };
+  if (Number.isFinite(difference) && difference !== 0) {
+    const current = formatDecimalAmount(root.old_price, currency);
+    const next = formatDecimalAmount(root.new_price, currency);
+    const diff = formatDecimalAmount(root.price_difference, currency);
+    if (current) financial.currentAmountLabel = current;
+    if (next) financial.newAmountLabel = next;
+    if (diff) financial.differenceLabel = diff;
+  }
+  const result: RescheduleResultView = {
+    appointmentReference,
+    status: parseStatusKey(replacement.status) ?? "rescheduled",
+    startsAt,
+    financial,
+  };
+  const endsAt = readString(replacement.ends_at);
+  if (endsAt) result.endsAt = endsAt;
+  const branchName = asSafeText(isRecord(replacement.branch) ? replacement.branch.name : undefined);
+  if (branchName) result.branchName = branchName;
+  const provider = adaptAssignedStaff(replacement.staff);
+  if (provider) result.provider = provider;
+  if (financial.status === "additional_payment") result.paymentRequired = true;
+  return result;
+}
+
 export function adaptRescheduleResult(payload: unknown): RescheduleResultView | null {
   const root = unwrapPayload(payload);
   if (!isRecord(root) || isInternalResource(root)) {
     return null;
+  }
+  if (isRecord(root.replacement_appointment)) {
+    return adaptBackendRescheduleResult(root);
   }
   const appointmentReference =
     publicId(root.appointmentReference) ??

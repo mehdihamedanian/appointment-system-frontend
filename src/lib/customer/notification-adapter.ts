@@ -72,7 +72,10 @@ export function adaptCustomerNotification(value: unknown): CustomerNotificationV
     notificationId(value.reference);
   const title = asSafeText(value.title) ?? asSafeText(value.subject);
   const createdAt =
-    readString(value.createdAt) ?? readString(value.sentAt) ?? readString(value.occurredAt);
+    readString(value.createdAt) ??
+    readString(value.created_at) ??
+    readString(value.sentAt) ??
+    readString(value.occurredAt);
   if (!id || !title || !createdAt) {
     return null;
   }
@@ -96,15 +99,20 @@ export function adaptCustomerNotification(value: unknown): CustomerNotificationV
 
   const view: CustomerNotificationView = {
     id,
-    type: parseNotificationType(value.type ?? value.category ?? value.kind),
+    type: parseNotificationType(
+      value.type ?? value.notification_type ?? value.category ?? value.kind,
+    ),
     title,
     createdAt,
-    read: readBoolean(value.read) ?? readBoolean(value.isRead) ?? Boolean(readString(value.readAt)),
+    read:
+      readBoolean(value.read) ??
+      readBoolean(value.isRead) ??
+      Boolean(readString(value.readAt) ?? readString(value.read_at)),
   };
 
   const message = asSafeText(value.message) ?? asSafeText(value.body) ?? asSafeText(value.summary);
   if (message) view.message = message;
-  const readAt = readString(value.readAt);
+  const readAt = readString(value.readAt) ?? readString(value.read_at);
   if (readAt) view.readAt = readAt;
   if (entityType) view.entityType = entityType;
   if (entityReference) view.entityReference = entityReference;
@@ -138,7 +146,10 @@ export function adaptCustomerNotificationList(
   const page = readNumber(source.page) ?? input.page;
   const pageCount = readNumber(source.pageCount) ?? readNumber(source.totalPages);
   const totalCount = readNumber(source.totalCount) ?? readNumber(source.total);
-  const unreadCount = readNumber(source.unreadCount) ?? readNumber(source.unreadNotificationCount);
+  const unreadCount =
+    readNumber(source.unreadCount) ??
+    readNumber(source.unread_count) ??
+    readNumber(source.unreadNotificationCount);
   const nextCursor = readString(source.nextCursor) ?? readString(source.cursor);
   const hasMore =
     readBoolean(source.hasMore) === true ||
@@ -190,6 +201,7 @@ export function adaptUnreadCount(payload: unknown): NotificationUnreadCountView 
   const source = isRecord(root) ? root : {};
   const unreadCount =
     readNumber(source.unreadCount) ??
+    readNumber(source.unread_count) ??
     readNumber(source.count) ??
     readNumber(source.unreadNotificationCount) ??
     0;

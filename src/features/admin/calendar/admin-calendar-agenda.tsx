@@ -1,6 +1,6 @@
 "use client";
 
-import { formatAppointmentParts } from "@/lib/date-time/format";
+import { formatAppointmentParts, formatIsoDateLabel } from "@/lib/date-time/format";
 import { getStatusPresentation } from "@/lib/status/status-map";
 import { StatusBadge } from "@/components/ui/data-display";
 import { isoDateInTimeZone } from "@/lib/admin/calendar-range";
@@ -40,7 +40,11 @@ export function AdminCalendarAgenda({
     <div className="admin-calendar-agenda" role="list" aria-label="فهرست رویدادهای تقویم">
       {groups.map((group) => (
         <div key={group.date} role="listitem">
-          <h3 className="admin-calendar-agenda__date ltr-value">{group.date}</h3>
+          <h3 className="admin-calendar-agenda__date">
+            <time dateTime={group.date}>
+              {formatIsoDateLabel(group.date, { weekday: true }) ?? group.date}
+            </time>
+          </h3>
           {group.events.map((event) => {
             const parts = formatAppointmentParts(event.startsAt, view.timezone);
             const endParts = formatAppointmentParts(event.endsAt, view.timezone);

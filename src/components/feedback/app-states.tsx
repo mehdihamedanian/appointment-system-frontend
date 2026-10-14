@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import {
   Ban,
   CalendarOff,
@@ -31,16 +31,17 @@ function StateCard({
   action?: ReactNode;
   role?: "status" | "alert";
 }) {
+  const titleId = useId();
   return (
     <section
       className={`state-card state-card--${tone}`}
-      aria-labelledby="feedback-state-title"
+      aria-labelledby={titleId}
       role={role}
     >
       <div className="state-card__icon" aria-hidden="true">
         {icon}
       </div>
-      <h2 id="feedback-state-title">{title}</h2>
+      <h2 id={titleId}>{title}</h2>
       <p>{description}</p>
       {action}
     </section>
@@ -275,11 +276,14 @@ export function UnexpectedErrorState({
   description = "لطفاً صفحه را تازه‌سازی کنید یا کمی بعد دوباره تلاش کنید.",
   onRetry,
   detail,
+  reference,
 }: {
   title?: string;
   description?: string;
   onRetry?: () => void;
   detail?: string;
+  /** Server error digest; matches the `request_error` log line, safe to show. */
+  reference?: string;
 }) {
   const showDetail = process.env.NODE_ENV === "development" && Boolean(detail);
 
@@ -293,6 +297,11 @@ export function UnexpectedErrorState({
       action={
         <>
           {showDetail ? <p className="ltr-value">{detail}</p> : null}
+          {!showDetail && reference ? (
+            <p>
+              کد پیگیری: <span className="ltr-value">{reference}</span>
+            </p>
+          ) : null}
           {onRetry ? (
             <Button variant="secondary" onClick={onRetry}>
               تلاش دوباره

@@ -90,6 +90,56 @@ describe("admin staff adapter", () => {
     expect(perf?.metrics).toHaveLength(1);
   });
 
+  it("reads Backend StaffListItem and StaffRead fields", () => {
+    const list = adaptAdminStaffList(
+      {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "9f1d3c2a-0000-4000-8000-0000000000bb",
+              resource_id: "9f1d3c2a-0000-4000-8000-0000000000cc",
+              first_name: "سارا",
+              last_name: "نمونه",
+              job_title: "پزشک",
+              specialty: null,
+              is_active: false,
+              has_login_account: false,
+              branch_count: 0,
+            },
+          ],
+          meta: { page: 1, page_size: 20, total: 1 },
+        },
+      },
+      1,
+    );
+    expect(list.items[0]?.name).toBe("سارا نمونه");
+    expect(list.items[0]?.jobTitle).toBe("پزشک");
+    expect(list.items[0]?.lifecycle).toBe("inactive");
+    expect(list.items[0]?.resourceHref).toBe(
+      "/admin/resources/9f1d3c2a-0000-4000-8000-0000000000cc",
+    );
+
+    const detail = adaptAdminStaffDetail({
+      success: true,
+      data: {
+        id: "9f1d3c2a-0000-4000-8000-0000000000bb",
+        resource_id: "9f1d3c2a-0000-4000-8000-0000000000cc",
+        first_name: "سارا",
+        last_name: "نمونه",
+        description: "متخصص پوست",
+        is_active: true,
+        branches: [{ id: "9f1d3c2a-0000-4000-8000-0000000000dd", name: "مرکزی", is_active: true }],
+        user: { id: "9f1d3c2a-0000-4000-8000-0000000000ee" },
+      },
+    });
+    expect(detail?.firstName).toBe("سارا");
+    expect(detail?.lastName).toBe("نمونه");
+    expect(detail?.publicDescription).toBe("متخصص پوست");
+    expect(detail?.branches.map((branch) => branch.name)).toEqual(["مرکزی"]);
+    expect(detail?.adminUserReference).toBe("9f1d3c2a-0000-4000-8000-0000000000ee");
+  });
+
   it("detects duplicate staff errors", () => {
     expect(isDuplicateStaffError({ status: 409, code: "STAFF_DUPLICATE" })).toBe(true);
   });

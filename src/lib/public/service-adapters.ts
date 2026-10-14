@@ -162,6 +162,9 @@ export function adaptServiceDeposit(
   }
 
   const amount = integerAmount(source.depositAmount) ?? integerAmount(source.deposit);
+  if (amount === 0 && !labeled) {
+    return { kind: "none", label: "بدون بیعانه" };
+  }
   if (type === "fixed" || amount !== undefined) {
     if (labeled) {
       return { kind: "fixed", label: labeled };
@@ -267,7 +270,10 @@ export function adaptServiceListItem(
       asSafeText(value.shortDescription) ??
       asSafeText(value.summary),
     imageUrl: readUrl(value.imageUrl ?? value.image ?? value.coverImage),
-    durationMinutes: integerAmount(value.durationMinutes) ?? integerAmount(value.duration),
+    durationMinutes:
+      integerAmount(value.durationMinutes) ??
+      integerAmount(value.duration_minutes) ??
+      integerAmount(value.duration),
     pricing: adaptServicePrice(value, currency),
     deposit: deposit?.kind === "none" ? undefined : deposit,
     category: adaptCategory(value.category ?? value.serviceCategory),
@@ -279,6 +285,9 @@ export function adaptServiceListItem(
 function catalogIsPaginated(root: unknown): boolean {
   if (!isRecord(root)) {
     return false;
+  }
+  if (isRecord(root.meta)) {
+    return (readNumber(root.meta.total_pages) ?? 0) > 1;
   }
   return (
     readNumber(root.page) !== undefined ||
@@ -297,7 +306,11 @@ export function adaptServiceCatalog(
     .map((item) => adaptServiceListItem(item, currency))
     .filter((item): item is ServiceListItemView => Boolean(item));
 
-  const totalCount = isRecord(root) ? readNumber(root.total) ?? readNumber(root.totalCount) : undefined;
+  const totalCount = isRecord(root)
+    ? readNumber(root.total) ??
+      readNumber(root.totalCount) ??
+      (isRecord(root.meta) ? readNumber(root.meta.total_items) : undefined)
+    : undefined;
 
   return {
     items,

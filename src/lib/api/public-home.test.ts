@@ -38,6 +38,61 @@ describe("loadPublicHome", () => {
     expect(result.branches).toEqual({ ok: true, data: [] });
   });
 
+  it("loads the Backend service catalog when only the public business endpoint is missing", async () => {
+    mockApi.mockImplementation(async (path) => {
+      if (path === "/services") {
+        return {
+          success: true,
+          data: {
+            items: [
+              {
+                id: "7d0c6f1e-0000-4000-8000-000000000001",
+                title: "ویزیت",
+                duration_minutes: 30,
+                price: "150000.00",
+                deposit: "0.00",
+                capacity: 1,
+                status: "active",
+                sort_order: 0,
+              },
+            ],
+            meta: { page: 1, page_size: 100, total_items: 1, total_pages: 1 },
+          },
+        };
+      }
+      throw new ApiError({ status: 404, code: "NOT_FOUND", message: "missing" });
+    });
+
+    const { loadPublicHome } = await import("@/lib/api/public");
+    const result = await loadPublicHome();
+
+    expect(mockApi).toHaveBeenCalledWith(
+      "/services",
+      expect.objectContaining({ query: { status: "active", page: 1, page_size: 100 } }),
+    );
+    expect(result.services?.ok).toBe(true);
+    if (result.services?.ok) {
+      expect(result.services.data).toEqual([
+        expect.objectContaining({ name: "ویزیت", durationMinutes: 30 }),
+      ]);
+    }
+  });
+
+  it("keeps an unauthorized catalog as an error instead of an empty list", async () => {
+    mockApi.mockImplementation(async (path) => {
+      if (path === "/services") {
+        throw new ApiError({ status: 401, code: "AUTHENTICATION_REQUIRED", message: "login" });
+      }
+      throw new ApiError({ status: 404, code: "NOT_FOUND", message: "missing" });
+    });
+
+    const { loadPublicHome } = await import("@/lib/api/public");
+    const result = await loadPublicHome();
+
+    expect(result.business.ok).toBe(true);
+    expect(result.services).toMatchObject({ ok: false, error: { status: 401 } });
+  });
+
   it("keeps a hard error when the public business API fails unexpectedly", async () => {
     mockApi.mockRejectedValue(
       new ApiError({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cycleTab, focusFirst } from "@/lib/accessibility/focus";
 
 export function useScrollLock(active: boolean): void {
@@ -41,22 +41,29 @@ export function useFocusTrap(
     initialFocus?: () => HTMLElement | null;
   } = {},
 ): void {
-  const { onEscape, preventClose = false, restoreFocus = true, initialFocus } = options;
+  const { restoreFocus = true } = options;
+  // Callers usually pass inline callbacks; re-running the trap on every render
+  // would move focus out of the field the user is typing in.
+  const latest = useRef({ ...options, getRoot });
+  useEffect(() => {
+    latest.current = { ...options, getRoot };
+  });
 
   useEffect(() => {
     if (!active) {
       return;
     }
 
+    const resolveRoot = () => latest.current.getRoot();
     const previouslyFocused = document.activeElement as HTMLElement | null;
     let cancelled = false;
     let focusFrame = 0;
 
     function tryFocusRoot() {
       if (cancelled) return;
-      const root = getRoot();
+      const root = resolveRoot();
       if (root) {
-        const preferred = initialFocus?.();
+        const preferred = latest.current.initialFocus?.();
         if (preferred && root.contains(preferred)) {
           preferred.focus();
         } else {
@@ -75,10 +82,10 @@ export function useFocusTrap(
     tryFocusRoot();
 
     function onKeyDown(event: KeyboardEvent) {
-      const current = getRoot();
-      if (event.key === "Escape" && !preventClose) {
+      const current = resolveRoot();
+      if (event.key === "Escape" && !latest.current.preventClose) {
         event.preventDefault();
-        onEscape?.();
+        latest.current.onEscape?.();
         return;
       }
 
@@ -94,9 +101,9 @@ export function useFocusTrap(
         window.cancelAnimationFrame(focusFrame);
       }
       document.removeEventListener("keydown", onKeyDown);
-      if (restoreFocus) {
-        previouslyFocused?.focus();
+      if (restoreFocus && previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
       }
     };
-  }, [active, getRoot, onEscape, preventClose, restoreFocus, initialFocus]);
+  }, [active, restoreFocus]);
 }

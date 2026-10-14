@@ -1,3 +1,4 @@
+import { formatIsoDateLabel, formatWeekdayLabel } from "@/lib/date-time/format";
 import { asSafeText } from "@/lib/public/read";
 import type { AdditionalFieldDefinition } from "@/types/booking";
 import type { EligibleProvidersView, ProviderPreference } from "@/types/provider";
@@ -48,27 +49,9 @@ export function formatAdditionalAnswer(
   return safe;
 }
 
-export function weekdayAndDateLabel(isoDate: string, timeZone?: string): { weekday: string; date: string } | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-    return null;
-  }
-  const date = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  try {
-    const weekday = new Intl.DateTimeFormat("fa-IR", {
-      weekday: "long",
-      timeZone: timeZone || undefined,
-      calendar: "gregory",
-    }).format(date);
-    const formatted = new Intl.DateTimeFormat("fa-IR", {
-      dateStyle: "medium",
-      timeZone: timeZone || undefined,
-      calendar: "gregory",
-    }).format(date);
-    return { weekday, date: formatted };
-  } catch {
-    return { weekday: "", date: isoDate };
-  }
+/** The booking date is a business-local calendar date; it is labelled without any timezone shift. */
+export function weekdayAndDateLabel(isoDate: string): { weekday: string; date: string } | null {
+  const weekday = formatWeekdayLabel(isoDate);
+  const date = formatIsoDateLabel(isoDate);
+  return weekday && date ? { weekday, date } : null;
 }

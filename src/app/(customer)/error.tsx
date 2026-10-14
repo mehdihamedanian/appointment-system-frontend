@@ -14,6 +14,7 @@ export default function CustomerError({
       title="خطا در پنل مشتری"
       onRetry={reset}
       detail={error.digest ?? error.message}
+      reference={error.digest}
     />
   );
 }

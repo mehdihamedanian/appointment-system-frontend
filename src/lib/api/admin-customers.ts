@@ -99,7 +99,7 @@ export async function updateAdminCustomer(
       method: "PATCH",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: sanitizeAdminCustomerBody(input),
+      body: sanitizeAdminCustomerBody(input, "update"),
     },
   );
   const view = adaptAdminCustomerDetail(payload);

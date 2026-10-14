@@ -16,14 +16,13 @@ import {
   ADMIN_REQUIREMENT_NECESSITY_LABELS,
   ADMIN_REQUIREMENT_SELECTION_MODE_LABELS,
   ADMIN_REQUIREMENT_SPECIFIC_SEMANTICS_LABELS,
-  ADMIN_SERVICE_RESOURCE_REQUIREMENT_TYPES,
   type AdminRequirementBranchScope,
   type AdminRequirementNecessity,
   type AdminRequirementSelectionMode,
   type AdminServiceResourceRequirementDraft,
   type AdminServiceResourceRequirementsCapabilities,
 } from "@/types/admin-service-resource-requirement";
-import { ADMIN_RESOURCE_TYPE_LABELS, type AdminResourceType } from "@/types/admin-resource";
+import type { AdminResourceTypeOption } from "@/types/admin-resource";
 import type { RequirementRowErrors } from "@/lib/admin/service-resource-requirement-adapter";
 
 export function ServiceResourceRequirementRow({
@@ -32,6 +31,7 @@ export function ServiceResourceRequirementRow({
   index,
   errors,
   capabilities,
+  typeOptions,
   branchOptions,
   onChange,
   onRemove,
@@ -46,6 +46,8 @@ export function ServiceResourceRequirementRow({
   index: number;
   errors?: RequirementRowErrors;
   capabilities: AdminServiceResourceRequirementsCapabilities;
+  /** Backend resource types (`GET /resources/types`). */
+  typeOptions: AdminResourceTypeOption[];
   branchOptions: Array<{ value: string; label: string }>;
   onChange: (patch: Partial<AdminServiceResourceRequirementDraft>) => void;
   onRemove: () => void;
@@ -57,35 +59,23 @@ export function ServiceResourceRequirementRow({
 }) {
   const rowId = useId();
   const showSpecific = draft.selectionMode === "specific";
+  const resourceTypeId = draft.resourceTypeId ?? "";
   const eligibleQuery = useQuery({
-    queryKey: [
-      "admin",
-      "services",
-      "eligible-resources",
-      serviceReference,
-      draft.resourceType,
-      draft.branchId ?? "",
-    ],
-    queryFn: ({ signal }) =>
-      fetchEligibleResourcesForRequirement(
-        serviceReference,
-        { type: draft.resourceType, branchId: draft.branchId },
-        signal,
-      ),
-    enabled: showSpecific && draft.resourceType !== "unknown" && Boolean(serviceReference),
+    queryKey: ["admin", "services", "eligible-resources", serviceReference, resourceTypeId],
+    queryFn: ({ signal }) => fetchEligibleResourcesForRequirement(resourceTypeId, signal),
+    enabled: showSpecific && Boolean(resourceTypeId),
     staleTime: 30_000,
   });
 
   useEffect(() => {
     if (!showSpecific || !eligibleQuery.data?.items.length) return;
-    const allowed = new Set(eligibleQuery.data.items.map((item) => item.id));
-    const filtered = draft.selectedResourceIds.filter((id) => allowed.has(id));
-    if (filtered.length !== draft.selectedResourceIds.length) {
+    const names = new Map(eligibleQuery.data.items.map((item) => [item.id, item.name]));
+    const filtered = draft.selectedResourceIds.filter((id) => names.has(id));
+    const unnamed = filtered.some((id) => draft.selectedResourceNames?.[id] !== names.get(id));
+    if (filtered.length !== draft.selectedResourceIds.length || unnamed) {
       onChange({
         selectedResourceIds: filtered,
-        selectedResourceNames: Object.fromEntries(
-          filtered.map((id) => [id, draft.selectedResourceNames?.[id] ?? id]),
-        ),
+        selectedResourceNames: Object.fromEntries(filtered.map((id) => [id, names.get(id) ?? id])),
       });
     }
   }, [draft.selectedResourceIds, draft.selectedResourceNames, eligibleQuery.data?.items, onChange, showSpecific]);
@@ -100,9 +90,9 @@ export function ServiceResourceRequirementRow({
       data-row-index={index}
     >
       <div className="admin-service-requirement-row__head">
-        <h4 id={`${rowId}-title`} className="text-card-title">
+        <h2 id={`${rowId}-title`} className="text-card-title">
           نیازمندی {index + 1}
-        </h4>
+        </h2>
         <div className="admin-service-requirement-row__actions">
           {capabilities.canReorder ? (
             <>
@@ -128,18 +118,21 @@ export function ServiceResourceRequirementRow({
       <FormField id={`${rowId}-type`} label="نوع منبع" required error={errors?.resourceType}>
         <Select
           id={`${rowId}-type`}
-          value={draft.resourceType}
-          options={ADMIN_SERVICE_RESOURCE_REQUIREMENT_TYPES.map((type) => ({
-            value: type,
-            label: ADMIN_RESOURCE_TYPE_LABELS[type],
-          }))}
-          onChange={(value) =>
+          value={draft.resourceTypeId}
+          placeholder="انتخاب نوع منبع"
+          disabled={typeOptions.length === 0}
+          options={typeOptions.map((option) => ({ value: option.id, label: option.label }))}
+          onChange={(value) => {
+            const option = typeOptions.find((item) => item.id === value);
+            if (!option) return;
             onChange({
-              resourceType: (value as AdminResourceType) ?? "room",
+              resourceTypeId: option.id,
+              resourceType: option.type,
               selectedResourceIds: [],
-              providerSelectable: value === "staff" ? draft.providerSelectable : false,
-            })
-          }
+              selectedResourceNames: {},
+              providerSelectable: option.type === "staff" ? draft.providerSelectable : false,
+            });
+          }}
         />
       </FormField>
 
@@ -210,14 +203,14 @@ export function ServiceResourceRequirementRow({
           required
           error={errors?.selectedResourceIds}
         >
-          {eligibleQuery.isPending ? <InlineLoading label="بارگذاری منابع واجد شرایط" /> : null}
+          {eligibleQuery.isFetching ? <InlineLoading label="بارگذاری منابع واجد شرایط" /> : null}
           {eligibleQuery.isError ? (
-            <Alert tone="warning" title="منابع واجد شرایط دریافت نشد" description="نوع یا شعبه را بررسی کنید." />
+            <Alert tone="warning" title="منابع واجد شرایط دریافت نشد" description="اتصال را بررسی و دوباره تلاش کنید." />
           ) : null}
           <MultiSelect
             id={`${rowId}-specific`}
             values={draft.selectedResourceIds}
-            disabled={eligibleQuery.isPending}
+            disabled={!resourceTypeId || eligibleQuery.isPending}
             options={(eligibleQuery.data?.items ?? []).map((item) => ({
               value: item.id,
               label: item.branchName ? `${item.name} (${item.branchName})` : item.name,
@@ -243,7 +236,7 @@ export function ServiceResourceRequirementRow({
             <p className="ds-help">{eligibleQuery.data.semanticsLabel}</p>
           ) : (
             <p className="ds-help">
-              معنی «جایگزین» یا «هم‌زمان» را Backend تعیین می‌کند — UI حدس نمی‌زند.
+              با یک منبع، همان منبع رزرو می‌شود؛ با چند منبع، یکی از آن‌ها به‌عنوان جایگزین تخصیص می‌یابد.
             </p>
           )}
         </FormField>

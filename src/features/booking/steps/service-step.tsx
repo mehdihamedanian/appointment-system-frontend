@@ -27,7 +27,7 @@ export function ServiceStep({
 }) {
   if (loading) {
     return (
-      <div aria-busy="true" aria-label="در حال بارگذاری خدمات">
+      <div role="status" aria-busy="true" aria-label="در حال بارگذاری خدمات">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </div>
@@ -66,7 +66,13 @@ export function ServiceStep({
             checked={selectedId === service.id}
             className="booking-option"
             onChange={() => onSelect(service.id)}
-            label={<ServiceCard service={service} bookingEnabled={false} showActions={false} />}
+            aria-label={service.name}
+            aria-describedby={`booking-service-${service.id}`}
+            label={
+              <span id={`booking-service-${service.id}`} className="booking-option__content">
+                <ServiceCard service={service} bookingEnabled={false} showActions={false} />
+              </span>
+            }
           />
         ))}
       </div>

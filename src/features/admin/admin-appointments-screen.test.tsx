@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import { axeViolations } from "@/test/axe";
 import { AdminAppointmentsScreen } from "@/features/admin/admin-appointments-screen";
 import { ApiError } from "@/lib/api/errors";
 import { authenticatedAdmin, createSessionValue, renderWithProviders } from "@/test/render";
@@ -49,6 +50,16 @@ describe("AdminAppointmentsScreen", () => {
     });
     expect((await screen.findAllByText("سارا محمدی")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("REF-1").length).toBeGreaterThan(0);
+  });
+
+  it("renders an accessible appointments table", async () => {
+    mockedClient.mockResolvedValue(listPayload());
+    renderWithProviders(<AdminAppointmentsScreen />, {
+      session: createSessionValue({ status: "authenticated", user: authenticatedAdmin }),
+    });
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByRole("columnheader").length).toBeGreaterThan(0);
+    expect(await axeViolations()).toEqual([]);
   });
 
   it("shows 404 missing endpoint state", async () => {

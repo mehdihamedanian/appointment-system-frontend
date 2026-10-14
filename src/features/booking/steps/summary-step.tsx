@@ -94,7 +94,7 @@ export function SummaryStep({
 }) {
   if (quoteLoading) {
     return (
-      <div className="booking-summary" aria-busy="true" aria-label="در حال بارگذاری استعلام رزرو">
+      <div className="booking-summary" role="status" aria-busy="true" aria-label="در حال بارگذاری استعلام رزرو">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
         <Skeleton variant="line" />
@@ -121,7 +121,7 @@ export function SummaryStep({
   const branchAddress = quote?.branch?.address ?? branch?.address;
   const tz = quote?.timezone ?? timezone;
   const slotParts = quote?.slot?.startsAt ? formatAppointmentParts(quote.slot.startsAt, tz) : null;
-  const dateParts = draft.date ? weekdayAndDateLabel(draft.date, tz) : null;
+  const dateParts = draft.date ? weekdayAndDateLabel(draft.date) : null;
   const timeLabel = quote?.slot?.label ?? slotParts?.time;
   const policy = quote?.policySnapshot;
   const consentRequired = policy?.consentRequired === true;
@@ -162,7 +162,13 @@ export function SummaryStep({
             }
           />
         ) : null}
-        {!quote?.authoritative ? (
+        {quote?.pricedAtBooking ? (
+          <Alert
+            tone="info"
+            title="مبلغ نهایی هنگام ثبت نوبت تعیین می‌شود"
+            description="سرویس نوبت‌دهی مبلغ و نیاز به پرداخت را هنگام ثبت اعلام می‌کند. اگر پرداخت آنلاین لازم باشد، پس از ثبت گزینهٔ پرداخت نمایش داده می‌شود."
+          />
+        ) : !quote?.authoritative ? (
           <Alert
             tone="info"
             title="مبالغ نمایشی قطعی نیست"
@@ -324,14 +330,28 @@ export function SummaryStep({
                 </SummaryRow>
               ) : null}
             </dl>
+          ) : quote?.pricedAtBooking && service?.pricing.label ? (
+            <dl className="booking-summary-list booking-summary-list--money">
+              <SummaryRow term="قیمت فهرست خدمت">
+                <span className="booking-money ltr-value">{service.pricing.label}</span>
+              </SummaryRow>
+            </dl>
           ) : (
             <p className="ds-help">مبلغ از استعلام سرویس نوبت‌دهی می‌آید و در این صفحه جمع زده نمی‌شود.</p>
           )}
-          <p>
-            <strong>{paymentCopy.title}</strong>
-          </p>
-          <p className="ds-help">{paymentCopy.description}</p>
-          {onRetryQuote ? (
+          {quote?.pricedAtBooking ? (
+            <p className="ds-help">
+              تخفیف، بیعانه و مبلغ قابل پرداخت را سرویس نوبت‌دهی پس از ثبت نوبت اعلام می‌کند.
+            </p>
+          ) : (
+            <>
+              <p>
+                <strong>{paymentCopy.title}</strong>
+              </p>
+              <p className="ds-help">{paymentCopy.description}</p>
+            </>
+          )}
+          {onRetryQuote && !quote?.pricedAtBooking ? (
             <Button variant="secondary" onClick={onRetryQuote} disabled={quoteRefreshing}>
               به‌روزرسانی استعلام
             </Button>
@@ -346,7 +366,7 @@ export function canSubmitQuote(
   quote: BookingQuoteView | undefined,
   input: { quoteReviewed: boolean; policyAccepted: boolean; expired: boolean },
 ): boolean {
-  if (!quote?.authoritative || input.expired) {
+  if (!(quote?.authoritative || quote?.pricedAtBooking) || input.expired) {
     return false;
   }
   if (quote.changed && !input.quoteReviewed) {

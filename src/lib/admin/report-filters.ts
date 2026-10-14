@@ -6,6 +6,7 @@ import {
   parseAdminReportType,
 } from "@/lib/admin/report-adapter";
 import { isSafePublicId } from "@/lib/public/booking-href";
+import { daysBetweenIsoDates } from "@/lib/date-time/zoned";
 import {
   ADMIN_REPORT_TYPES,
   type AdminReportDatePreset,
@@ -341,10 +342,11 @@ export function validateReportRange(
     return { valid: false, message: "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد." };
   }
   if (typeof maxRangeDays === "number" && maxRangeDays > 0) {
-    const start = new Date(`${filters.from}T12:00:00`);
-    const end = new Date(`${filters.to}T12:00:00`);
-    const days = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
-    if (days > maxRangeDays) {
+    const span = daysBetweenIsoDates(filters.from, filters.to);
+    if (span === null) {
+      return { valid: false, message: "تاریخ بازه معتبر نیست." };
+    }
+    if (span + 1 > maxRangeDays) {
       return {
         valid: false,
         message: `حداکثر بازه مجاز ${new Intl.NumberFormat("fa-IR").format(maxRangeDays)} روز است.`,

@@ -185,7 +185,7 @@ export function AdminCouponForm({
       return;
     }
 
-    const validation = validateAdminCouponForm(form);
+    const validation = validateAdminCouponForm({ ...form, timeZone: timezoneLabel });
     setErrors(validation);
     if (Object.keys(validation).length) {
       setFormError("لطفاً خطاهای فرم را برطرف کنید.");
@@ -227,7 +227,10 @@ export function AdminCouponForm({
     setConflict(undefined);
     try {
       if (mode === "create") {
-        const created = await createAdminCoupon(form, createIdempotencyKey());
+        const created = await createAdminCoupon(
+          { ...form, timeZone: timezoneLabel },
+          createIdempotencyKey(),
+        );
         invalidateAfterAdminCouponMutation(queryClient, userId, created.reference);
         toast.success("کوپن ایجاد شد.");
         router.push(adminCouponDetailHref(created.reference));
@@ -236,7 +239,7 @@ export function AdminCouponForm({
 
       const updated = await updateAdminCoupon(
         reference!,
-        form,
+        { ...form, timeZone: timezoneLabel },
         createIdempotencyKey(),
         initial?.version,
       );

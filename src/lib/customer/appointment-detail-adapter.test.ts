@@ -165,6 +165,44 @@ describe("appointment detail adapter", () => {
     expect(href).toContain("repeatFrom=apt_detail_1");
     expect(href).not.toMatch(/slot|payment|quote|hold/i);
   });
+
+  it("maps the backend CustomerAppointmentDetail payment and pay action", () => {
+    const view = adaptCustomerAppointmentDetail({
+      success: true,
+      data: {
+        id: "f6e9a5a2-85aa-48d2-86bf-6f134a9e31d7",
+        booking_reference: "APT-698A0409",
+        starts_at: "2026-10-15T06:15:00Z",
+        ends_at: "2026-10-15T06:45:00Z",
+        status: "pending",
+        payment_status: "unpaid",
+        service: { id: "3fd22740-b8e6-4813-add2-d9979ffe8ab4", title: "مشاوره آزمون" },
+        branch: { id: "11111111-2222-4333-8444-555555555555", name: "E2E Branch" },
+        staff: [{ staff_id: "a33d41a4-119f-473e-a868-0abecc08c9ca", display_name: "Sara Fixture" }],
+        duration_snapshot: 30,
+        customer_notes: "یادداشت مشتری",
+        payment: {
+          payment_status: "unpaid",
+          currency: "IRR",
+          total_amount: "150000.00",
+          successful_paid_amount: "0.00",
+          outstanding_balance: "150000.00",
+        },
+        actions: { can_cancel: true, can_reschedule: true, can_repeat: false, can_pay: true },
+      },
+    });
+    expect(view?.publicReference).toBe("APT-698A0409");
+    expect(view?.appointmentId).toBe("f6e9a5a2-85aa-48d2-86bf-6f134a9e31d7");
+    expect(view?.provider?.name).toBe("Sara Fixture");
+    expect(view?.durationMinutes).toBe(30);
+    expect(view?.customerNote).toBe("یادداشت مشتری");
+    expect(view?.payment.status).toBe("unpaid");
+    expect(view?.payment.totalLabel).toBeTruthy();
+    expect(view?.payment.remainingLabel).toBe(view?.payment.totalLabel);
+    expect(view?.payment.paidLabel).toBeUndefined();
+    expect(view?.actions.canPay).toBe(true);
+    expect(view?.actions.payHref).toBe("/appointments/APT-698A0409/payment");
+  });
 });
 
 describe("timeline event adapter", () => {

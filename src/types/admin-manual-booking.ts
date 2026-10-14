@@ -64,6 +64,8 @@ export type AdminResourceAllocationGroupView = {
   mode: "automatic" | "select" | "override";
   items: AdminResourceAllocationItemView[];
   selectedIds?: string[];
+  /** At most one resource may be chosen (Backend `resource_selections` is one per requirement). */
+  single?: boolean;
 };
 
 export type AdminResourceAllocationView = {

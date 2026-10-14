@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { remainingSeconds, formatCountdown } from "@/lib/auth/otp-countdown";
-import { isValidIranMobile, maskPhone, normalizeIranMobile } from "@/lib/auth/phone";
+import {
+  isValidIranMobile,
+  maskPhone,
+  normalizeIranMobile,
+  toE164IranMobile,
+} from "@/lib/auth/phone";
 import { clearFrontendCaches } from "@/lib/auth/session";
 import { QueryClient } from "@tanstack/react-query";
 import { isAdminRoute } from "@/lib/auth/route-access";
@@ -13,6 +18,8 @@ describe("phone normalization", () => {
     expect(isValidIranMobile("۰۹۱۲۱۲۳۴۵۶۷")).toBe(true);
     expect(isValidIranMobile("123")).toBe(false);
     expect(maskPhone("09121234567")).toContain("***");
+    expect(toE164IranMobile("09121234567")).toBe("+989121234567");
+    expect(toE164IranMobile("۰۹۱۲۱۲۳۴۵۶۷")).toBe("+989121234567");
   });
 });
 
@@ -53,5 +60,14 @@ describe("logout cache cleanup", () => {
     );
     clearFrontendCaches(new QueryClient());
     expect(window.sessionStorage.getItem("appointment.booking.hold.v1")).toBeNull();
+  });
+
+  it("clears the pending payment reference so the next account cannot resume it", () => {
+    window.sessionStorage.setItem(
+      "appointment.booking.payment.v1",
+      JSON.stringify({ version: 1, paymentReference: "pay_1" }),
+    );
+    clearFrontendCaches(new QueryClient());
+    expect(window.sessionStorage.getItem("appointment.booking.payment.v1")).toBeNull();
   });
 });

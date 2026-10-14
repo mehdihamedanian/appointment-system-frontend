@@ -26,7 +26,7 @@ export function BranchStep({
 }) {
   if (loading) {
     return (
-      <div aria-busy="true" aria-label="در حال بارگذاری شعبه‌ها">
+      <div role="status" aria-busy="true" aria-label="در حال بارگذاری شعبه‌ها">
         <Skeleton variant="card" />
       </div>
     );

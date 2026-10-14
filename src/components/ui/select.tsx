@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { Popover } from "@/components/ui/popover";
 import { IconButton } from "@/components/ui/icon-button";
 import { SearchInput } from "@/components/ui/search-input";
@@ -22,7 +22,29 @@ type SelectBase = {
   loading?: boolean;
   emptyLabel?: string;
   allowClear?: boolean;
+  /** Accessible name of the option list (usually the field label). */
+  label?: string;
 };
+
+/** Arrow/Home/End move between options; ArrowDown from a search field enters the list. */
+export function moveOptionFocus(event: KeyboardEvent<HTMLElement>) {
+  const options = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]:not([disabled])'),
+  );
+  if (options.length === 0) return;
+  const index = options.indexOf(document.activeElement as HTMLElement);
+  if (index < 0 && event.key !== "ArrowDown") return;
+  const targets: Record<string, number> = {
+    ArrowDown: index < 0 ? 0 : Math.min(index + 1, options.length - 1),
+    ArrowUp: Math.max(index - 1, 0),
+    Home: 0,
+    End: options.length - 1,
+  };
+  const next = targets[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  options[next]?.focus();
+}
 
 export function Select({
   id,
@@ -35,6 +57,7 @@ export function Select({
   loading,
   emptyLabel = "موردی نیست",
   allowClear = false,
+  label,
 }: SelectBase & {
   value?: string;
   onChange: (value: string | undefined) => void;
@@ -61,17 +84,27 @@ export function Select({
         </button>
       }
     >
-      <ul role="listbox" className="ds-listbox" aria-busy={loading || undefined}>
+      <ul
+        role="listbox"
+        className="ds-listbox"
+        aria-label={label ?? placeholder}
+        aria-busy={loading || undefined}
+        onKeyDown={moveOptionFocus}
+      >
         {allowClear && value ? (
-          <li>
+          <li role="none">
             <button type="button" className="ds-option" onClick={() => onChange(undefined)}>
               پاک کردن
             </button>
           </li>
         ) : null}
-        {options.length === 0 ? <li className="ds-help">{emptyLabel}</li> : null}
+        {options.length === 0 ? (
+          <li role="none" className="ds-help">
+            {emptyLabel}
+          </li>
+        ) : null}
         {options.map((option) => (
-          <li key={option.value}>
+          <li key={option.value} role="none">
             <button
               type="button"
               role="option"
@@ -104,6 +137,7 @@ export function MultiSelect({
   loading,
   emptyLabel = "نتیجه‌ای پیدا نشد",
   maxSelected,
+  label,
 }: SelectBase & {
   values: string[];
   onChange: (values: string[]) => void;
@@ -149,7 +183,11 @@ export function MultiSelect({
           </button>
         }
       >
-        <div className="ds-stack" style={{ gap: "var(--space-2)", padding: "var(--space-2)" }}>
+        <div
+          className="ds-stack"
+          style={{ gap: "var(--space-2)", padding: "var(--space-2)" }}
+          onKeyDown={moveOptionFocus}
+        >
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -157,10 +195,19 @@ export function MultiSelect({
             placeholder="جستجو"
             aria-label="جستجوی گزینه‌ها"
           />
-          <ul role="listbox" aria-multiselectable="true" aria-busy={loading || undefined}>
-            {visible.length === 0 ? <li className="ds-help">{emptyLabel}</li> : null}
+          <ul
+            role="listbox"
+            aria-multiselectable="true"
+            aria-label={label ?? placeholder}
+            aria-busy={loading || undefined}
+          >
+            {visible.length === 0 ? (
+              <li role="none" className="ds-help">
+                {emptyLabel}
+              </li>
+            ) : null}
             {visible.map((option) => (
-              <li key={option.value}>
+              <li key={option.value} role="none">
                 <button
                   type="button"
                   role="option"
@@ -170,7 +217,7 @@ export function MultiSelect({
                   onClick={() => toggle(option.value)}
                 >
                   {option.label}
-                  {values.includes(option.value) ? <Check size={14} /> : null}
+                  {values.includes(option.value) ? <Check size={14} aria-hidden="true" /> : null}
                 </button>
               </li>
             ))}

@@ -43,4 +43,6 @@ export type BookingConfirmationView = {
   pricing: ConfirmationPricingView;
   transactionReference?: string;
   instructions?: string;
+  /** Present only when the Backend's `actions.can_pay` allows online payment. */
+  payHref?: string;
 };

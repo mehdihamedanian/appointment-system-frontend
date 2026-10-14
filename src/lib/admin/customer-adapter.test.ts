@@ -4,6 +4,7 @@ import {
   adaptAdminCustomerImpactPreview,
   adaptAdminCustomerList,
   formatAdminCustomerMetric,
+  sanitizeAdminCustomerBody,
   validateAdminCustomerForm,
 } from "@/lib/admin/customer-adapter";
 
@@ -67,6 +68,20 @@ describe("admin customer adapter", () => {
     expect(validateAdminCustomerForm({ firstName: "", lastName: "ر", phone: "0912", email: "" })).toEqual(
       expect.objectContaining({ firstName: expect.any(String), phone: expect.any(String) }),
     );
+  });
+
+  it("maps the form to the Backend customer create and update bodies", () => {
+    const form = { firstName: " سارا ", lastName: "رضایی", phone: "09121234567", email: "", version: "3" };
+    expect(sanitizeAdminCustomerBody(form)).toEqual({
+      first_name: "سارا",
+      last_name: "رضایی",
+      mobile: "+989121234567",
+    });
+    expect(sanitizeAdminCustomerBody({ ...form, email: "sara@example.com" }, "update")).toEqual({
+      first_name: "سارا",
+      last_name: "رضایی",
+      email: "sara@example.com",
+    });
   });
 
   it("adapts block impact preview", () => {

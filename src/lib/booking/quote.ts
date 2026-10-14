@@ -1,4 +1,4 @@
-import { isTimestampExpired } from "@/lib/date-time/format";
+import { remainingMsFromTimestamps } from "@/lib/date-time/server-clock";
 import type { AppApiError } from "@/types/api";
 import type { QuotePaymentMode } from "@/types/booking";
 
@@ -34,20 +34,13 @@ export function isQuoteExpired(
   receivedAt: number,
   now = Date.now(),
 ): boolean {
-  if (!quote.expiresAt) {
-    return false;
-  }
-  const expires = Date.parse(quote.expiresAt);
-  if (Number.isNaN(expires)) {
-    return false;
-  }
-  if (quote.serverNow) {
-    const serverNow = Date.parse(quote.serverNow);
-    if (!Number.isNaN(serverNow)) {
-      return serverNow + (now - receivedAt) >= expires;
-    }
-  }
-  return isTimestampExpired(quote.expiresAt, new Date(now));
+  const remaining = remainingMsFromTimestamps({
+    expiresAt: quote.expiresAt,
+    serverNow: quote.serverNow,
+    receivedAt,
+    now,
+  });
+  return remaining !== null && remaining <= 0;
 }
 
 export const PAYMENT_MODE_COPY: Record<QuotePaymentMode, { title: string; description: string }> = {

@@ -1,47 +1,94 @@
+import { env } from "@/config/env";
+import { serverNow } from "@/lib/date-time/server-clock";
+import {
+  isoDateInZone,
+  parseInstantInZone,
+  parseIsoDateParts,
+  resolveTimeZone,
+} from "@/lib/date-time/zoned";
+
+/** Intl calendar id for the configured display calendar. */
+export function intlCalendar(): "persian" | "gregory" {
+  return env.calendarSystem === "gregorian" ? "gregory" : "persian";
+}
+
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = JSON.stringify(options);
+  let cached = formatters.get(key);
+  if (!cached) {
+    cached = new Intl.DateTimeFormat("fa-IR", options);
+    formatters.set(key, cached);
+  }
+  return cached;
+}
+
+/**
+ * Date and time of an instant in the business (or explicitly given) timezone.
+ * Invalid or missing timezones resolve to the configured business timezone,
+ * never the device timezone.
+ */
 export function formatAppointmentParts(
   iso: string,
   timeZone?: string,
 ): { date: string; time: string; label: string } | null {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
+  const zone = resolveTimeZone(timeZone);
+  const instant = parseInstantInZone(iso, zone);
+  if (!instant) {
     return null;
   }
+  const date = formatter({ calendar: intlCalendar(), timeZone: zone, dateStyle: "medium" }).format(instant);
+  const time = formatter({
+    calendar: intlCalendar(),
+    timeZone: zone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(instant);
+  return { date, time, label: `${date}، ساعت ${time}` };
+}
 
-  const options = {
-    calendar: "gregory",
-    timeZone: timeZone || undefined,
-  } as const;
-
-  try {
-    const dateText = new Intl.DateTimeFormat("fa-IR", {
-      ...options,
-      dateStyle: "medium",
-    }).format(date);
-    const timeText = new Intl.DateTimeFormat("fa-IR", {
-      ...options,
-      timeStyle: "short",
-      hourCycle: "h23",
-    }).format(date);
-    return {
-      date: dateText,
-      time: timeText,
-      label: `${dateText}، ساعت ${timeText}`,
-    };
-  } catch {
-    if (timeZone) {
-      return formatAppointmentParts(iso, undefined);
-    }
+/**
+ * Label for a calendar date (`YYYY-MM-DD`). Calendar dates have no timezone,
+ * so they are rendered at UTC noon in UTC to keep the same day everywhere.
+ */
+export function formatIsoDateLabel(
+  isoDate: string,
+  options: { style?: "medium" | "long" | "full"; weekday?: boolean } = {},
+): string | null {
+  const parts = parseIsoDateParts(isoDate);
+  if (!parts) {
     return null;
   }
+  const instant = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+  const style = options.style ?? "medium";
+  // ICU's fa "full" pattern for the Persian calendar is inconsistent across runtimes
+  // (e.g. "۱۴۰۵ شهریور ۱, یکشنبه"), so weekday labels are composed explicitly.
+  if (options.weekday || style === "full") {
+    const weekday = formatter({ timeZone: "UTC", weekday: "long" }).format(instant);
+    const date = formatter({ calendar: intlCalendar(), timeZone: "UTC", dateStyle: "long" }).format(instant);
+    return `${weekday} ${date}`;
+  }
+  return formatter({ calendar: intlCalendar(), timeZone: "UTC", dateStyle: style }).format(instant);
+}
+
+export function formatWeekdayLabel(isoDate: string): string | null {
+  const parts = parseIsoDateParts(isoDate);
+  if (!parts) {
+    return null;
+  }
+  const instant = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+  return formatter({ timeZone: "UTC", weekday: "long" }).format(instant);
 }
 
 export function formatDurationMinutes(minutes: number): string {
-  return `${minutes} دقیقه`;
+  return `${new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 0 }).format(minutes)} دقیقه`;
 }
 
-export function formatRelativeTime(iso: string, now: Date = new Date()): string | null {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
+export function formatRelativeTime(iso: string, now: Date = serverNow()): string | null {
+  const date = parseInstantInZone(iso, resolveTimeZone());
+  if (!date) {
     return null;
   }
   const deltaSeconds = Math.round((date.getTime() - now.getTime()) / 1000);
@@ -74,35 +121,27 @@ export function formatCurrencyAmount(amount: number, currency?: string): string 
   }
 }
 
-export function todayIsoInTimeZone(timeZone?: string, now: Date = new Date()): string {
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timeZone || undefined,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(now);
-    const year = parts.find((part) => part.type === "year")?.value;
-    const month = parts.find((part) => part.type === "month")?.value;
-    const day = parts.find((part) => part.type === "day")?.value;
-    if (year && month && day) {
-      return `${year}-${month}-${day}`;
-    }
-  } catch {
-    // Fall through to local date.
+/** Formats a Backend `Decimal` amount (`"150000.00"` or a number); fractional amounts are not rounded. */
+export function formatDecimalAmount(value: unknown, currency?: string): string | undefined {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  const match = /^(-?\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!match || (match[2] && !/^0+$/.test(match[2]))) {
+    return undefined;
   }
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return formatCurrencyAmount(Number(match[1]), currency);
 }
 
-export function isTimestampExpired(iso: string | undefined, now: Date = new Date()): boolean {
+/** Today's calendar date in the business (or given) timezone, by the server-referenced clock. */
+export function todayIsoInTimeZone(timeZone?: string, now: Date = serverNow()): string {
+  return isoDateInZone(now, resolveTimeZone(timeZone));
+}
+
+export function isTimestampExpired(iso: string | undefined, now: Date = serverNow()): boolean {
   if (!iso) {
     return false;
   }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseInstantInZone(iso, resolveTimeZone());
+  if (!date) {
     return false;
   }
   return date.getTime() <= now.getTime();

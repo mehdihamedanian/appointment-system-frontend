@@ -19,10 +19,8 @@ import {
   validateAllRequirementDrafts,
 } from "@/lib/admin/service-resource-requirement-adapter";
 import { invalidateAfterServiceResourceRequirementsMutation } from "@/lib/admin/service-resource-requirement-cache";
-import {
-  fetchAdminServiceResourceRequirementsImpactPreview,
-  saveAdminServiceResourceRequirements,
-} from "@/lib/api/admin-service-resources";
+import { adminResourceTypesQueryOptions } from "@/lib/api/admin-resources";
+import { saveAdminServiceResourceRequirements } from "@/lib/api/admin-service-resources";
 import {
   isForbiddenError,
   isSessionExpiredError,
@@ -37,10 +35,19 @@ import type {
   AdminServiceResourceRequirementsView,
 } from "@/types/admin-service-resource-requirement";
 
+/** The Backend has no preview route; this states what its full-replace PUT does. */
+const SAVE_CONFIRMATION: AdminServiceResourceRequirementsImpactPreview = {
+  title: "تأیید ذخیره نیازمندی‌ها",
+  summary:
+    "همه نیازمندی‌های منبع این خدمت با این فهرست جایگزین می‌شوند و دسترس‌پذیری نوبت‌های بعدی بر اساس آن محاسبه می‌شود.",
+  effects: [],
+  requiresConfirmation: true,
+};
+
 function createEmptyDraft(sortOrder: number): AdminServiceResourceRequirementDraft {
   return {
     key: `new_${Date.now()}_${sortOrder}`,
-    resourceType: "staff",
+    resourceType: "unknown",
     quantity: 1,
     necessity: "required",
     selectionMode: "any_of_type",
@@ -78,7 +85,6 @@ export function ServiceResourceRequirementsEditor({
   const [formError, setFormError] = useState<string>();
   const [conflict, setConflict] = useState<string>();
   const [impact, setImpact] = useState<AdminServiceResourceRequirementsImpactPreview | null>(null);
-  const [impactLoading, setImpactLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [removeKey, setRemoveKey] = useState<string | null>(null);
@@ -92,6 +98,8 @@ export function ServiceResourceRequirementsEditor({
     staleTime: 60_000,
   });
   const branchOptions = (branchesQuery.data ?? []).map((b) => ({ value: b.id, label: b.name }));
+  const typesQuery = useQuery(adminResourceTypesQueryOptions(userId));
+  const typeOptions = typesQuery.data ?? [];
 
   useEffect(() => {
     if (!dirty) return;
@@ -161,7 +169,7 @@ export function ServiceResourceRequirementsEditor({
     });
   }
 
-  async function prepareSave() {
+  function prepareSave() {
     if (!canEdit || submitLock.current) return;
     const errors = validateAllRequirementDrafts(drafts, {
       hasBranchScope: view.capabilities.hasBranchScope,
@@ -173,32 +181,7 @@ export function ServiceResourceRequirementsEditor({
     }
     setFormError(undefined);
     setConflict(undefined);
-    setImpactLoading(true);
-    try {
-      const preview = await fetchAdminServiceResourceRequirementsImpactPreview(
-        serviceReference,
-        inputFromDrafts(drafts, view.version),
-      );
-      if (preview.requiresConfirmation) {
-        setImpact(preview);
-        return;
-      }
-      await executeSave();
-    } catch (error) {
-      const apiError = toAppApiError(error);
-      if (isSessionExpiredError(apiError)) return;
-      if (isNotFoundImpact(apiError)) {
-        await executeSave();
-        return;
-      }
-      setFormError(apiError.message);
-    } finally {
-      setImpactLoading(false);
-    }
-  }
-
-  function isNotFoundImpact(error: ReturnType<typeof toAppApiError>) {
-    return error.status === 404;
+    setImpact(SAVE_CONFIRMATION);
   }
 
   async function executeSave() {
@@ -269,6 +252,7 @@ export function ServiceResourceRequirementsEditor({
                 index={index}
                 errors={rowErrors[draft.key]}
                 capabilities={view.capabilities}
+                typeOptions={typeOptions}
                 branchOptions={branchOptions}
                 onChange={(patch) => updateDraft(draft.key, patch)}
                 onRemove={() => setRemoveKey(draft.key)}
@@ -296,7 +280,7 @@ export function ServiceResourceRequirementsEditor({
           <Button
             type="button"
             variant="ghost"
-            disabled={saving || impactLoading}
+            disabled={saving}
             onClick={() => {
               if (dirty) setLeaveOpen(true);
               else setDrafts(JSON.parse(baseline) as AdminServiceResourceRequirementDraft[]);
@@ -306,8 +290,8 @@ export function ServiceResourceRequirementsEditor({
           </Button>
           <Button
             type="button"
-            loading={saving || impactLoading}
-            onClick={() => void prepareSave()}
+            loading={saving}
+            onClick={prepareSave}
           >
             ذخیره نیازمندی‌ها
           </Button>

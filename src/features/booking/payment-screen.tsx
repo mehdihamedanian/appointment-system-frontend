@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Spinner } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
-import { ApiErrorState, SessionExpiredState } from "@/components/feedback/app-states";
+import { ApiErrorState, EmptyState, SessionExpiredState } from "@/components/feedback/app-states";
 import { Skeleton } from "@/components/feedback/loading-states";
 import { CouponField } from "@/features/booking/coupon-field";
 import { HoldCountdown } from "@/features/booking/hold-countdown";
@@ -38,6 +38,7 @@ import { getSafeGatewayRedirect } from "@/lib/payment/safe-gateway-url";
 import { writePaymentReference } from "@/lib/payment/session-store";
 import { derivePaymentUiState, paymentAttemptBlocked } from "@/lib/payment/state";
 import { requiresHoldForMethod } from "@/lib/payment/adapter";
+import { useIsClient } from "@/lib/accessibility/focus";
 import { draftFromPersisted, readBookingDraft } from "@/lib/booking/persistence";
 import { readHoldReference } from "@/lib/booking/hold-session";
 import { HOLD_REVALIDATE_NEAR_MS } from "@/types/hold";
@@ -49,6 +50,7 @@ import { routes, LOGIN_PATH } from "@/constants/routes";
 import type { AppApiError } from "@/types/api";
 
 export function PaymentScreen() {
+  const isClient = useIsClient();
   const router = useRouter();
   const queryClient = useQueryClient();
   const submitLock = useRef(false);
@@ -343,9 +345,30 @@ export function PaymentScreen() {
     );
   }
 
+  if (isClient && (!draft.serviceId || !draft.slotId || !draft.date)) {
+    return (
+      <div className="booking-payment">
+        <EmptyState
+          title="رزرو در حال انجامی پیدا نشد"
+          description="برای پرداخت نوبتی که قبلاً ثبت شده، از صفحه جزئیات همان نوبت اقدام کنید."
+          action={
+            <Button asChild>
+              <Link href={routes.customer.appointments}>نوبت‌های من</Link>
+            </Button>
+          }
+          secondaryAction={
+            <Button variant="secondary" asChild>
+              <Link href={routes.customer.booking}>رزرو نوبت جدید</Link>
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
   if (quoteQuery.isPending && !quote) {
     return (
-      <div className="booking-payment" aria-busy="true" aria-label="در حال بارگذاری پرداخت">
+      <div className="booking-payment" role="status" aria-busy="true" aria-label="در حال بارگذاری پرداخت">
         <Skeleton variant="card" />
         <Skeleton variant="line" />
       </div>

@@ -50,6 +50,9 @@ describe("Phase 28 admin resources E2E flow", () => {
       const url = String(path);
       const method = init?.method ?? "GET";
       if (url.includes("/public/business")) return { branchesEnabled: false };
+      if (url === "/admin/resources/types") {
+        return [{ id: "rt_room", code: "room", display_name: "Room", is_system: true }];
+      }
       if (url.startsWith("/admin/resources?") || url === "/admin/resources") {
         if (method === "POST") {
           return {
@@ -124,10 +127,18 @@ describe("Phase 28 admin resources E2E flow", () => {
       session,
     });
     await screen.findByText("منبع جدید");
+    await waitFor(() => expect(screen.getByRole("button", { name: "ایجاد منبع" })).toBeEnabled());
     await user.type(screen.getByLabelText(/نام/), "اتاق جدید");
     await user.click(screen.getByRole("button", { name: "ایجاد منبع" }));
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/admin/resources/ROOM-1");
+    });
+    const createCall = mockedClient.mock.calls.find(
+      ([path, init]) => path === "/admin/resources" && (init as { method?: string })?.method === "POST",
+    );
+    expect((createCall?.[1] as { body?: unknown })?.body).toEqual({
+      name: "اتاق جدید",
+      resourceTypeId: "rt_room",
     });
     unmountCreate();
 

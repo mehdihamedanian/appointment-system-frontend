@@ -9,12 +9,8 @@ import { InlineLoading, Skeleton } from "@/components/feedback/loading-states";
 import { AdminStaffForm } from "@/features/admin/staff/admin-staff-form";
 import { PermissionGate } from "@/features/admin/permission-gate";
 import { useSession } from "@/features/auth/session-provider";
-import {
-  adminStaffDetailQueryOptions,
-  adminStaffListQueryOptions,
-} from "@/lib/api/admin-staff";
+import { adminStaffDetailQueryOptions } from "@/lib/api/admin-staff";
 import { isNotFoundError, toAppApiError } from "@/lib/api/errors";
-import { parseAdminStaffFilters } from "@/lib/admin/staff-filters";
 import { routes } from "@/constants/routes";
 
 export function AdminStaffEditScreen() {
@@ -40,14 +36,6 @@ export function AdminStaffEditScreen() {
 
 function AdminStaffEditReady({ userId, reference }: { userId: string; reference: string }) {
   const detailQuery = useQuery(adminStaffDetailQueryOptions(userId, reference));
-  const listQuery = useQuery(
-    adminStaffListQueryOptions(userId, parseAdminStaffFilters(new URLSearchParams())),
-  );
-  const serviceOptions =
-    listQuery.data?.filterOptions?.services?.map((s) => ({
-      value: s.id,
-      label: s.name,
-    })) ?? [];
 
   if (detailQuery.isPending) {
     return (
@@ -90,7 +78,6 @@ function AdminStaffEditReady({ userId, reference }: { userId: string; reference:
         mode="edit"
         reference={reference}
         initial={detailQuery.data}
-        serviceOptions={serviceOptions}
       />
     </>
   );

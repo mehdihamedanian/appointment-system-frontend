@@ -158,21 +158,16 @@ export type AdminStaffDetailView = {
   };
 };
 
+/** Mirrors Backend `StaffCreate`/`StaffUpdate`, which reject unknown fields. */
 export type AdminStaffFormInput = {
-  firstName?: string;
-  lastName?: string;
-  name: string;
+  /** Backend `resource_type_id` (a human type: staff or specialist); create only. */
+  resourceTypeId?: string;
+  firstName: string;
+  lastName: string;
   jobTitle?: string;
   specialty?: string;
   publicDescription?: string;
-  phone?: string;
-  email?: string;
   branchIds: string[];
-  primaryBranchId?: string;
-  serviceIds: string[];
-  customerVisible: boolean;
-  bookable: boolean;
-  scheduleMode?: AdminStaffScheduleMode;
   version?: string;
 };
 

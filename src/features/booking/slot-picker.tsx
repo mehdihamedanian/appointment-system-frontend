@@ -27,7 +27,7 @@ export function SlotPicker({
 
   if (loading) {
     return (
-      <div className="booking-slot-skeleton" aria-busy="true" aria-label="در حال بارگذاری ساعت‌ها">
+      <div className="booking-slot-skeleton" role="status" aria-busy="true" aria-label="در حال بارگذاری ساعت‌ها">
         <Skeleton variant="line" />
         <div className="booking-slot-grid">
           <Skeleton variant="card" />
@@ -57,7 +57,9 @@ export function SlotPicker({
                 const statusLabel =
                   slot.status === "held"
                     ? "در حال نگهداری"
-                    : slot.status === "unavailable"
+                    : slot.status === "past"
+                      ? "زمان آن گذشته است"
+                      : slot.status === "unavailable"
                       ? "دیگر در دسترس نیست"
                       : selected
                         ? "انتخاب‌شده"

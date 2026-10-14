@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -240,10 +240,11 @@ function AppointmentPaymentSection({
   onRetry?: () => void;
 }) {
   const { payment } = view;
+  const headingId = useId();
 
   return (
-    <section className="appointment-detail-card" aria-labelledby="appointment-payment">
-      <h2 id="appointment-payment" className="text-card-title">
+    <section className="appointment-detail-card" aria-labelledby={headingId}>
+      <h2 id={headingId} className="text-card-title">
         خلاصه پرداخت
       </h2>
       {error ? (
@@ -319,6 +320,7 @@ function AppointmentActionsPanel({
   const router = useRouter();
   const { actions } = view;
   const processing = actions.processing === true;
+  const headingId = useId();
   const showPay = actions.canPay && Boolean(actions.payHref);
   const showRepeat = actions.canRepeat && Boolean(repeatHref);
   const showCancel = APPOINTMENT_CANCEL_ENABLED && actions.canCancel;
@@ -340,8 +342,8 @@ function AppointmentActionsPanel({
   }
 
   return (
-    <section className="appointment-detail-card appointment-detail-card--actions" aria-labelledby="appointment-actions">
-      <h2 id="appointment-actions" className="text-card-title">
+    <section className="appointment-detail-card appointment-detail-card--actions" aria-labelledby={headingId}>
+      <h2 id={headingId} className="text-card-title">
         اقدامات
       </h2>
       <div className="appointment-detail__actions">

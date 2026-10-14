@@ -16,12 +16,15 @@ export function NotificationListItem({
   onMarkRead,
   marking,
   compact = false,
+  headingLevel = "h3",
 }: {
   item: CustomerNotificationView;
   onMarkRead?: (id: string) => void;
   marking?: boolean;
   compact?: boolean;
+  headingLevel?: "h2" | "h3";
 }) {
+  const Heading = headingLevel;
   const when = formatRelativeTime(item.createdAt);
   const typeLabel = notificationTypeLabel(item.type);
   const titleId = `notification-${item.id}-title`;
@@ -43,9 +46,9 @@ export function NotificationListItem({
           ) : null}
           <span className="visually-hidden">{item.read ? "خوانده‌شده" : "خوانده‌نشده"}</span>
         </div>
-        <h3 id={titleId} className="notification-item__title">
+        <Heading id={titleId} className="notification-item__title">
           {item.title}
-        </h3>
+        </Heading>
         {item.message ? <p className="notification-item__message">{item.message}</p> : null}
         {when ? (
           <time dateTime={item.createdAt} className="text-caption">

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/ui/popover";
+import { moveOptionFocus } from "@/components/ui/select";
 import { IconButton } from "@/components/ui/icon-button";
 import { X } from "lucide-react";
+import { formatIsoDateLabel } from "@/lib/date-time/format";
 
 export function DatePicker({
   id,
@@ -16,9 +18,11 @@ export function DatePicker({
   isDateDisabled,
   invalid,
   disabled,
-  placeholder = "YYYY-MM-DD",
+  placeholder = "انتخاب تاریخ",
+  timeZone,
 }: {
   id?: string;
+  /** Gregorian ISO date (`YYYY-MM-DD`); displayed in the configured calendar. */
   value?: string;
   onChange: (value: string | undefined) => void;
   min?: string;
@@ -27,8 +31,11 @@ export function DatePicker({
   invalid?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  timeZone?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const dialogId = useId();
+  const display = value ? (formatIsoDateLabel(value) ?? value) : "";
 
   return (
     <Popover
@@ -41,16 +48,29 @@ export function DatePicker({
             readOnly
             disabled={disabled}
             invalid={invalid}
-            value={value ?? ""}
+            value={display}
             placeholder={placeholder}
-            className="ltr-value"
+            data-value={value ?? ""}
+            role="combobox"
             aria-haspopup="dialog"
+            aria-expanded={open}
+            aria-controls={open ? dialogId : undefined}
+            onKeyDown={(event) => {
+              if (disabled) return;
+              if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
+                event.preventDefault();
+                setOpen(true);
+              }
+            }}
             suffix={
               value ? (
                 <IconButton
                   size="sm"
                   label="پاک کردن تاریخ"
-                  onClick={() => onChange(undefined)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onChange(undefined);
+                  }}
                 >
                   <X size={14} />
                 </IconButton>
@@ -60,16 +80,19 @@ export function DatePicker({
         </div>
       }
     >
-      <Calendar
-        value={value}
-        min={min}
-        max={max}
-        isDateDisabled={isDateDisabled}
-        onChange={(next) => {
-          onChange(next);
-          setOpen(false);
-        }}
-      />
+      <div id={dialogId} role="dialog" aria-label="انتخاب تاریخ">
+        <Calendar
+          value={value}
+          min={min}
+          max={max}
+          timeZone={timeZone}
+          isDateDisabled={isDateDisabled}
+          onChange={(next) => {
+            onChange(next);
+            setOpen(false);
+          }}
+        />
+      </div>
     </Popover>
   );
 }
@@ -128,14 +151,15 @@ export function TimePicker({
           type="button"
           className={`ds-control ltr-value${invalid ? " is-invalid" : ""}`}
           disabled={disabled}
+          aria-haspopup="listbox"
         >
           {value ? labelFor(value) : "انتخاب ساعت"}
         </button>
       }
     >
-      <ul role="listbox" className="ds-listbox">
+      <ul role="listbox" className="ds-listbox" aria-label="انتخاب ساعت" onKeyDown={moveOptionFocus}>
         {options.map((option) => (
-          <li key={option}>
+          <li key={option} role="none">
             <button
               type="button"
               role="option"

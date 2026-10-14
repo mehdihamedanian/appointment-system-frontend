@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/selection";
 import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
 import { ApiErrorState } from "@/components/feedback/app-states";
 import { InlineLoading } from "@/components/feedback/loading-states";
@@ -19,10 +18,10 @@ import {
   adminResourceConflictMessage,
   isAdminResourceConflict,
   isDuplicateResourceError,
-  isInternalOperationalResourceType,
 } from "@/lib/admin/resource-adapter";
 import { invalidateAfterAdminResourceMutation } from "@/lib/admin/resource-cache";
 import {
+  adminResourceTypesQueryOptions,
   createAdminResource,
   updateAdminResource,
 } from "@/lib/api/admin-resources";
@@ -38,24 +37,18 @@ import { isCapabilityVisible, getBusinessCapabilities } from "@/config/capabilit
 import { queryKeys } from "@/lib/query/keys";
 import { routes } from "@/constants/routes";
 import {
-  ADMIN_RESOURCE_SCHEDULE_MODE_LABELS,
   ADMIN_RESOURCE_TYPE_LABELS,
-  ADMIN_RESOURCE_TYPES,
   type AdminResourceDetailView,
   type AdminResourceFormInput,
-  type AdminResourceScheduleMode,
-  type AdminResourceType,
 } from "@/types/admin-resource";
 
 function formFromDetail(detail?: AdminResourceDetailView | null): AdminResourceFormInput {
   return {
-    type: detail?.type && detail.type !== "unknown" ? detail.type : "room",
+    type: detail?.type ?? "unknown",
     name: detail?.name ?? "",
     description: detail?.description ?? "",
     capacity: detail?.capacity?.value,
     branchId: detail?.branch?.id,
-    scheduleMode: detail?.schedule.mode !== "unknown" ? detail?.schedule.mode : "inherit_business",
-    customerVisible: detail?.customerVisible ?? false,
     version: detail?.version,
   };
 }
@@ -100,6 +93,17 @@ export function AdminResourceForm({
     enabled: multiBranch,
     staleTime: 60_000,
   });
+  const typesQuery = useQuery({
+    ...adminResourceTypesQueryOptions(userId),
+    enabled: mode === "create" && Boolean(userId),
+  });
+
+  /** Staff and specialists are created in the staff module, which also creates their StaffProfile. */
+  const typeOptions = (typesQuery.data ?? []).filter((option) => !option.human);
+  const selectedType =
+    typeOptions.find((option) => option.id === form.resourceTypeId) ??
+    typeOptions.find((option) => option.code === "room") ??
+    typeOptions[0];
 
   useEffect(() => {
     if (!dirty) return;
@@ -112,36 +116,19 @@ export function AdminResourceForm({
   }, [dirty]);
 
   const capacityEditable = initial?.capacity?.editable !== false;
-  const showCustomerVisible =
-    form.type === "staff" &&
-    (initial?.capabilities.canSetCustomerVisible !== false);
-  /** Phase 29 owns staff creation; do not invent staff via the generic resource form. */
-  const createTypeOptions = ADMIN_RESOURCE_TYPES.filter((type) => type !== "staff");
-  const typeOptions =
-    mode === "create"
-      ? createTypeOptions
-      : form.type === "staff"
-        ? (["staff"] as AdminResourceType[])
-        : createTypeOptions;
 
   function validate(): boolean {
     const next: typeof fieldErrors = {};
     if (!form.name.trim()) next.name = "نام منبع را وارد کنید.";
-    if (!form.type || form.type === "unknown") next.type = "نوع منبع را انتخاب کنید.";
-    if (mode === "create" && form.type === "staff") {
-      next.type = "ایجاد کارمند از این فرم پشتیبانی نمی‌شود. از ماژول کارکنان استفاده کنید.";
-    }
+    if (mode === "create" && !selectedType) next.resourceTypeId = "نوع منبع را انتخاب کنید.";
     if (typeof form.capacity === "number") {
-      const min = initial?.capacity?.min ?? 0;
+      const min = initial?.capacity?.min ?? 1;
       const max = initial?.capacity?.max;
       if (form.capacity < min) next.capacity = `حداقل ظرفیت ${min} است.`;
       if (max !== undefined && form.capacity > max) next.capacity = `حداکثر ظرفیت ${max} است.`;
     }
     if (multiBranch && !form.branchId && initial?.capabilities.hasBranch !== false) {
       next.branchId = "شعبه را انتخاب کنید.";
-    }
-    if (isInternalOperationalResourceType(form.type) && form.customerVisible) {
-      next.customerVisible = "منابع داخلی نمی‌توانند برای مشتری نمایش داده شوند.";
     }
     setFieldErrors(next);
     return Object.keys(next).length === 0;
@@ -159,9 +146,10 @@ export function AdminResourceForm({
     try {
       const payload: AdminResourceFormInput = {
         ...form,
+        type: mode === "create" && selectedType ? selectedType.type : form.type,
+        resourceTypeId: mode === "create" ? selectedType?.id : undefined,
         name: form.name.trim(),
         description: form.description?.trim() || undefined,
-        customerVisible: showCustomerVisible ? form.customerVisible : undefined,
       };
       const result =
         mode === "create"
@@ -199,11 +187,14 @@ export function AdminResourceForm({
       if (isValidationError(apiError)) {
         setFieldErrors({
           name: pickFieldError(apiError.fieldErrors, ["name", "title"]),
-          type: pickFieldError(apiError.fieldErrors, ["type", "resourceType"]),
+          resourceTypeId: pickFieldError(apiError.fieldErrors, [
+            "resource_type_id",
+            "resourceTypeId",
+            "type",
+          ]),
           capacity: pickFieldError(apiError.fieldErrors, ["capacity"]),
-          branchId: pickFieldError(apiError.fieldErrors, ["branchId", "branch"]),
+          branchId: pickFieldError(apiError.fieldErrors, ["branch_ids", "branchId", "branch"]),
           description: pickFieldError(apiError.fieldErrors, ["description"]),
-          scheduleMode: pickFieldError(apiError.fieldErrors, ["scheduleMode"]),
         });
         setFormError(apiError.fieldErrors ? undefined : apiError.message);
         return;
@@ -224,8 +215,19 @@ export function AdminResourceForm({
     setLeaveOpen(true);
   }
 
-  if (businessQuery.isError) {
+  if (businessQuery.isError && !isNotFoundError(toAppApiError(businessQuery.error))) {
     return <ApiErrorState title="اطلاعات کسب‌وکار دریافت نشد" onRetry={() => void businessQuery.refetch()} />;
+  }
+  if (mode === "create" && typesQuery.isError) {
+    const error = toAppApiError(typesQuery.error);
+    return (
+      <ApiErrorState
+        title="انواع منبع دریافت نشد"
+        description={error.message}
+        requestId={error.requestId}
+        onRetry={() => void typesQuery.refetch()}
+      />
+    );
   }
 
   return (
@@ -234,31 +236,39 @@ export function AdminResourceForm({
         {formError ? <Alert tone="error" title="ذخیره انجام نشد" description={formError} /> : null}
         {conflict ? <Alert tone="warning" title="تداخل نسخه" description={conflict} /> : null}
 
-        <FormField id="resourceType" label="نوع منبع" required error={fieldErrors.type}>
-          <Select
-            id="resourceType"
-            value={form.type}
-            disabled={mode === "edit" || submitting}
-            options={typeOptions.map((type) => ({
-              value: type,
-              label: ADMIN_RESOURCE_TYPE_LABELS[type],
-            }))}
-            onChange={(value) =>
-              setForm((current) => ({
-                ...current,
-                type: (value as AdminResourceType) ?? "room",
-                customerVisible:
-                  value === "staff" ? current.customerVisible : false,
-              }))
-            }
-          />
+        <FormField id="resourceType" label="نوع منبع" required error={fieldErrors.resourceTypeId}>
+          {mode === "create" ? (
+            <>
+              {typesQuery.isPending ? <InlineLoading label="بارگذاری انواع منبع" /> : null}
+              <Select
+                id="resourceType"
+                value={selectedType?.id}
+                disabled={submitting || typesQuery.isPending}
+                options={typeOptions.map((option) => ({ value: option.id, label: option.label }))}
+                onChange={(value) => setForm((current) => ({ ...current, resourceTypeId: value }))}
+              />
+            </>
+          ) : (
+            <Select
+              id="resourceType"
+              value={form.type}
+              disabled
+              options={[
+                {
+                  value: form.type,
+                  label: initial?.typeLabel ?? ADMIN_RESOURCE_TYPE_LABELS[form.type],
+                },
+              ]}
+              onChange={() => undefined}
+            />
+          )}
         </FormField>
 
         {mode === "create" ? (
           <Alert
             tone="info"
             title="مرز کارکنان"
-            description="ایجاد و پرونده کارکنان در فاز ۲۹ است. این فرم فقط منابع عملیاتی داخلی (اتاق، دستگاه، …) را می‌سازد."
+            description="کارکنان و متخصصان از ماژول کارکنان ایجاد می‌شوند. این فرم فقط منابع عملیاتی (اتاق، دستگاه، …) را می‌سازد."
           />
         ) : null}
 
@@ -266,7 +276,7 @@ export function AdminResourceForm({
           <Alert
             tone="info"
             title="مرز کارکنان"
-            description="تخصص، مرخصی و پرونده شغلی در ماژول کارکنان (فاز ۲۹) مدیریت می‌شود. اینجا فقط مرجع زمان‌بندی مشترک است."
+            description="تخصص، مرخصی و پرونده شغلی در ماژول کارکنان مدیریت می‌شود. اینجا فقط مرجع زمان‌بندی مشترک است."
           />
         ) : null}
 
@@ -335,44 +345,9 @@ export function AdminResourceForm({
               onChange={(value) => setForm((current) => ({ ...current, branchId: value }))}
             />
           </FormField>
-        ) : (
-          <p className="ds-help">شعبه به‌صورت خودکار از پیکربندی تک‌شعبه‌ای کسب‌وکار اعمال می‌شود.</p>
-        )}
-
-        <FormField id="resourceScheduleMode" label="حالت زمان‌بندی" error={fieldErrors.scheduleMode}>
-          <Select
-            id="resourceScheduleMode"
-            value={form.scheduleMode ?? "inherit_business"}
-            disabled={submitting}
-            options={(["inherit_business", "inherit_branch", "custom"] as AdminResourceScheduleMode[]).map(
-              (modeValue) => ({
-                value: modeValue,
-                label: ADMIN_RESOURCE_SCHEDULE_MODE_LABELS[modeValue],
-              }),
-            )}
-            onChange={(value) =>
-              setForm((current) => ({
-                ...current,
-                scheduleMode: (value as AdminResourceScheduleMode) ?? "inherit_business",
-              }))
-            }
-          />
-          <p className="ds-help">
-            ویرایش کامل ساعات کاری در فاز ۳۲ انجام می‌شود. اینجا فقط حالت وراثت ثبت می‌شود.
-          </p>
-        </FormField>
-
-        {showCustomerVisible ? (
-          <Switch
-            label="نمایش برای مشتری به‌عنوان ارائه‌دهنده"
-            description="فقط برای کارکنان/ارائه‌دهندگان انسانی. منابع داخلی هرگز به مشتری نمایش داده نمی‌شوند."
-            checked={Boolean(form.customerVisible)}
-            disabled={submitting}
-            onCheckedChange={(checked) =>
-              setForm((current) => ({ ...current, customerVisible: checked }))
-            }
-          />
         ) : null}
+
+        <p className="ds-help">ساعات کاری، استراحت و زمان‌های مسدود این منبع از صفحهٔ زمان‌بندی آن مدیریت می‌شود.</p>
 
         <div className="booking-wizard__nav">
           <Button
@@ -389,7 +364,11 @@ export function AdminResourceForm({
           >
             انصراف
           </Button>
-          <Button type="submit" loading={submitting}>
+          <Button
+            type="submit"
+            loading={submitting}
+            disabled={mode === "create" && typesQuery.isPending}
+          >
             {mode === "create" ? "ایجاد منبع" : "ذخیره تغییرات"}
           </Button>
         </div>

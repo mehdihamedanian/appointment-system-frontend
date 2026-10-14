@@ -64,6 +64,7 @@ export function adaptSlotHold(payload: unknown): SlotHoldView | null {
     return null;
   }
   const holdId =
+    publicId(root.token) ??
     publicId(root.holdId) ??
     publicId(root.id) ??
     publicId(root.publicReference) ??
@@ -73,17 +74,24 @@ export function adaptSlotHold(payload: unknown): SlotHoldView | null {
   }
   const slotSource = isRecord(root.slot) && !isInternalResource(root.slot) ? root.slot : undefined;
   const slotId = publicId(slotSource?.id) ?? publicId(root.slotId);
+  const startsAt =
+    readString(slotSource?.startsAt) ??
+    readString(root.startsAt) ??
+    readString(root.starts_at);
   const view: SlotHoldView = {
     holdId,
     status: holdStatus(root.status ?? root.state),
     slot: {
       id: slotId ?? "",
-      startsAt: readString(slotSource?.startsAt) ?? readString(root.startsAt),
+      startsAt,
     },
   };
   const publicReference = publicId(root.publicReference) ?? publicId(root.reference) ?? holdId;
   if (publicReference) view.publicReference = publicReference;
-  const expiresAt = readString(root.expiresAt) ?? readString(root.holdExpiresAt);
+  const expiresAt =
+    readString(root.expiresAt) ??
+    readString(root.expires_at) ??
+    readString(root.holdExpiresAt);
   if (expiresAt) view.expiresAt = expiresAt;
   const serverNow = readString(root.serverNow) ?? readString(root.now);
   if (serverNow) view.serverNow = serverNow;

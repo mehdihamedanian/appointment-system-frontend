@@ -28,6 +28,36 @@ describe("API error normalization", () => {
     });
   });
 
+  it("reads the Backend error envelope without surfacing its English message", () => {
+    const error = normalizeHttpError(
+      422,
+      {
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "The request contains invalid data.",
+          details: [
+            { field: "query.date", message: "Input should be a valid date", code: "date_parsing" },
+            { field: "identifier", message: "Field required", code: "missing" },
+          ],
+        },
+        request_id: "req_backend",
+      },
+      new Headers(),
+    );
+
+    expect(error).toMatchObject({
+      status: 422,
+      code: "VALIDATION_ERROR",
+      fieldErrors: {
+        date: ["Input should be a valid date"],
+        identifier: ["Field required"],
+      },
+      requestId: "req_backend",
+    });
+    expect(error.message).not.toContain("invalid data");
+  });
+
   it("reads request ids from headers when the body omits them", () => {
     const error = normalizeHttpError(
       404,

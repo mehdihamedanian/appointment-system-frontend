@@ -10,6 +10,10 @@
 # production
 /build
 
+# Playwright
+/test-results/
+/playwright-report/
+
 # environment files
 .env*
 !.env.example

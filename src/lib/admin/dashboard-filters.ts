@@ -1,18 +1,11 @@
 import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { serverNow } from "@/lib/date-time/server-clock";
+import { addDaysToIsoDate, isIsoDate } from "@/lib/date-time/zoned";
 import { routes } from "@/constants/routes";
 import type { AdminDashboardFilters } from "@/types/admin-dashboard";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 export function sanitizeIsoDate(value: string | null | undefined): string | undefined {
-  if (!value || !ISO_DATE.test(value)) {
-    return undefined;
-  }
-  const parsed = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return undefined;
-  }
-  return value;
+  return isIsoDate(value) ? value : undefined;
 }
 
 export function sanitizeBranchId(value: string | null | undefined): string | undefined {
@@ -23,14 +16,14 @@ export function sanitizeBranchId(value: string | null | undefined): string | und
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function defaultOperationalDate(timezone?: string, now: Date = new Date()): string {
+export function defaultOperationalDate(timezone?: string, now: Date = serverNow()): string {
   return todayIsoInTimeZone(timezone, now);
 }
 
 export function parseAdminDashboardFilters(
   searchParams: URLSearchParams,
   timezone?: string,
-  now: Date = new Date(),
+  now: Date = serverNow(),
 ): AdminDashboardFilters {
   const date =
     sanitizeIsoDate(searchParams.get("date")) ?? defaultOperationalDate(timezone, now);
@@ -64,16 +57,35 @@ export function adminDashboardHref(filters: AdminDashboardFilters): string {
   return query ? `${routes.admin.home}?${query}` : routes.admin.home;
 }
 
-export function filtersToQueryParams(filters: AdminDashboardFilters): Record<string, string> {
-  const params: Record<string, string> = { date: filters.date };
-  if (filters.analyticsFrom) {
-    params.from = filters.analyticsFrom;
+export function addIsoDays(value: string, days: number): string {
+  return addDaysToIsoDate(value, days);
+}
+
+/** `/admin/dashboard/summary` uses an inclusive `start_date` and exclusive `end_date`. */
+export function operationalDayQueryParams(
+  filters: AdminDashboardFilters,
+): Record<string, string> {
+  const params: Record<string, string> = {
+    start_date: filters.date,
+    end_date: addIsoDays(filters.date, 1),
+  };
+  if (filters.branchId) {
+    params.branch_id = filters.branchId;
   }
-  if (filters.analyticsTo) {
-    params.to = filters.analyticsTo;
+  return params;
+}
+
+/** Without an explicit range the Backend applies its default reporting period. */
+export function analyticsRangeQueryParams(
+  filters: AdminDashboardFilters,
+): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (filters.analyticsFrom && filters.analyticsTo && filters.analyticsFrom <= filters.analyticsTo) {
+    params.start_date = filters.analyticsFrom;
+    params.end_date = addIsoDays(filters.analyticsTo, 1);
   }
   if (filters.branchId) {
-    params.branchId = filters.branchId;
+    params.branch_id = filters.branchId;
   }
   return params;
 }

@@ -59,7 +59,7 @@ import type { PolicySnapshot } from "@/types/appointment-detail";
 import type { AppApiError } from "@/types/api";
 
 function PolicyBlock({ policy }: { policy: PolicySnapshot }) {
-  if (!policy.title && !policy.summary && !policy.deadlineLabel && !policy.feeLabel && !policy.refundLabel) {
+  if (!policy.summary && !policy.deadlineLabel && !policy.feeLabel && !policy.refundLabel && !policy.policyUrl) {
     return null;
   }
   return (

@@ -60,6 +60,7 @@ export async function createPaymentSession(
   }
 }
 
+/** The Backend verifies with the gateway on its signed callback; clients only read the intent. */
 export async function fetchPaymentStatus(
   reference: string,
   signal?: AbortSignal,
@@ -76,32 +77,6 @@ export async function fetchPaymentStatus(
     throw missingPaymentError();
   }
   return view;
-}
-
-export async function verifyPayment(
-  reference: string,
-  signal?: AbortSignal,
-): Promise<PaymentSessionView> {
-  if (!isSafePublicId(reference)) {
-    throw missingPaymentError();
-  }
-  try {
-    const payload = await apiClient<unknown>(`/customer/payments/${reference}/verify`, {
-      method: "POST",
-      signal,
-      body: { paymentReference: reference },
-    });
-    const view = adaptPaymentSession(payload);
-    if (!view) {
-      throw missingPaymentError();
-    }
-    return view;
-  } catch (error) {
-    if (error instanceof ApiError && isNotFoundError(error)) {
-      return fetchPaymentStatus(reference, signal);
-    }
-    throw error;
-  }
 }
 
 export function paymentStatusQueryOptions(reference: string) {

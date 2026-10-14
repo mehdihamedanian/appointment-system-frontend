@@ -6,6 +6,7 @@ import { SectionError } from "@/features/public/section-error";
 import { ServiceCard } from "@/features/services/service-card";
 import { toServiceListItem } from "@/lib/public/service-adapters";
 import { routes } from "@/constants/routes";
+import { isUnauthorizedError } from "@/lib/api/errors";
 import type { LoadResult } from "@/lib/api/public";
 import type { PublicBusiness, PublicService } from "@/types/public";
 
@@ -22,7 +23,17 @@ export function FeaturedServices({
       title="خدمات"
       description="خدمات فعال این مجموعه برای رزرو."
     >
-      {!services.ok ? (
+      {!services.ok && isUnauthorizedError(services.error) ? (
+        <EmptyState
+          title="برای مشاهده خدمات وارد شوید"
+          description="فهرست خدمات فقط برای کاربران واردشده در دسترس است."
+          action={
+            <Button asChild variant="secondary">
+              <Link href={routes.auth.login}>ورود</Link>
+            </Button>
+          }
+        />
+      ) : !services.ok ? (
         <SectionError
           title="خدمات در حال حاضر نمایش داده نمی‌شود"
           description="بقیه صفحه در دسترس است. کمی بعد دوباره تلاش کنید."

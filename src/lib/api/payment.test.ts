@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";
-import { createPaymentSession, verifyPayment } from "@/lib/api/payment";
+import { createPaymentSession, fetchPaymentStatus } from "@/lib/api/payment";
 
 vi.mock("@/lib/api/client", () => ({
   apiClient: vi.fn(),
@@ -42,13 +42,45 @@ describe("payment API", () => {
     expect(result.outcome).toBe("missing_endpoint");
   });
 
-  it("verifies payment by POST and does not trust a query status", async () => {
+  it("reads payment status from the backend instead of trusting a query status", async () => {
     mockedClient.mockResolvedValue({ id: "pay_1", status: "paid", bookingReference: "BK22A" });
-    const view = await verifyPayment("pay_1");
+    const view = await fetchPaymentStatus("pay_1");
     expect(view.status).toBe("paid");
     expect(mockedClient).toHaveBeenCalledWith(
-      "/customer/payments/pay_1/verify",
-      expect.objectContaining({ method: "POST" }),
+      "/customer/payments/pay_1",
+      expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  it("treats a processing intent with a gateway URL as awaiting redirect", async () => {
+    mockedClient.mockResolvedValue({
+      intent_id: "3c0a7f2e-1d4b-4c8e-9f6a-2b5d7e9c1a3f",
+      intent_status: "processing",
+      payment_status: "unpaid",
+      amount: "150000.00",
+      currency: "IRR",
+      payment_url: "https://fake-gateway.test/pay/ref_1",
+    });
+    const result = await createPaymentSession(
+      { method: "full", bookingReference: "3c0a7f2e-1d4b-4c8e-9f6a-2b5d7e9c1a30" },
+      "key-pay-2",
+    );
+    expect(result.outcome).toBe("created");
+    if (result.outcome !== "created") return;
+    expect(result.session.status).toBe("redirect_required");
+    expect(result.session.redirectUrl).toBe("https://fake-gateway.test/pay/ref_1");
+    expect(result.session.payableNowLabel).toBeTruthy();
+  });
+
+  it("maps a succeeded backend intent to paid", async () => {
+    mockedClient.mockResolvedValue({
+      intent_id: "3c0a7f2e-1d4b-4c8e-9f6a-2b5d7e9c1a3f",
+      intent_status: "succeeded",
+      payment_status: "paid",
+      amount: "150000.00",
+      currency: "IRR",
+    });
+    const view = await fetchPaymentStatus("3c0a7f2e-1d4b-4c8e-9f6a-2b5d7e9c1a3f");
+    expect(view.status).toBe("paid");
   });
 });

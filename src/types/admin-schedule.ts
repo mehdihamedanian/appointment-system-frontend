@@ -131,6 +131,8 @@ export type AdminScheduleView = {
   allowedActions: AdminScheduleAllowedActions;
   capabilities: AdminScheduleCapabilities;
   calendarHref?: string;
+  /** When set, weekly hours are shown read-only (Backend-computed effective schedule) for this reason. */
+  weeklyReadOnlyReason?: string;
 };
 
 export type AdminScheduleWeeklyInput = {

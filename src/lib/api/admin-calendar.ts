@@ -5,6 +5,7 @@ import {
 } from "@/lib/admin/calendar-filters";
 import { visibleRangeFor } from "@/lib/admin/calendar-range";
 import { queryKeys } from "@/lib/query/keys";
+import { OPERATIONAL_VIEW_POLL, boundedPollInterval } from "@/lib/query/policies";
 import type { AdminCalendarState, AdminCalendarView } from "@/types/admin-calendar";
 
 export async function fetchAdminCalendar(
@@ -65,6 +66,7 @@ export function adminCalendarQueryOptions(
     refetchOnMount: "always" as const,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
+    refetchInterval: boundedPollInterval<AdminCalendarView>(() => true, OPERATIONAL_VIEW_POLL),
     retry: false,
   };
 }

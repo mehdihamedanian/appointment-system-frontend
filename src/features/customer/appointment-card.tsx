@@ -45,9 +45,9 @@ export function AppointmentCard({ item }: { item: AppointmentListItemView }) {
         <StatusBadge status={item.status} />
         {item.paymentStatus ? <StatusBadge status={item.paymentStatus} /> : null}
       </div>
-      <h3 id={headingId} className="appointment-card__service">
+      <h2 id={headingId} className="appointment-card__service">
         {item.service.name}
-      </h3>
+      </h2>
       {when ? (
         <p className="appointment-card__when">
           <time dateTime={item.startsAt}>{when.label}</time>

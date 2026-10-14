@@ -9,6 +9,11 @@ export type StepItem = {
   state: StepState;
 };
 
+const STATE_TEXT: Partial<Record<StepState, string>> = {
+  complete: "تکمیل‌شده",
+  error: "نیازمند اصلاح",
+};
+
 export function Stepper({
   steps,
   orientation = "horizontal",
@@ -21,44 +26,51 @@ export function Stepper({
   const current = steps.find((step) => step.state === "current");
 
   return (
-    <ol
-      className={cx("ds-stepper", orientation === "vertical" && "ds-stepper--vertical")}
-      aria-label="مراحل"
-    >
-      {steps.map((step, index) => {
-        const clickable = step.state === "complete" && onStepSelect;
-        const content = (
-          <>
-            <span className="ds-step__index" aria-hidden="true">
-              {index + 1}
-            </span>
-            <span>
-              <strong>{step.label}</strong>
-              {step.description ? <p className="ds-help">{step.description}</p> : null}
-            </span>
-          </>
-        );
+    <>
+      <ol
+        className={cx("ds-stepper", orientation === "vertical" && "ds-stepper--vertical")}
+        aria-label="مراحل"
+      >
+        {steps.map((step, index) => {
+          const clickable = step.state === "complete" && onStepSelect;
+          const content = (
+            <>
+              <span className="ds-step__index" aria-hidden="true">
+                {index + 1}
+              </span>
+              <span>
+                <strong>{step.label}</strong>
+                {STATE_TEXT[step.state] ? (
+                  <span className="visually-hidden">، {STATE_TEXT[step.state]}</span>
+                ) : null}
+                {step.description ? <p className="ds-help">{step.description}</p> : null}
+              </span>
+            </>
+          );
 
-        return (
-          <li
-            key={step.id}
-            className="ds-step"
-            data-state={step.state}
-            aria-current={step.state === "current" ? "step" : undefined}
-          >
-            {clickable ? (
-              <button type="button" className="ds-inline" onClick={() => onStepSelect(step.id)}>
-                {content}
-              </button>
-            ) : (
-              <div className="ds-inline">{content}</div>
-            )}
-          </li>
-        );
-      })}
+          return (
+            <li
+              key={step.id}
+              className="ds-step"
+              data-state={step.state}
+              aria-current={step.state === "current" ? "step" : undefined}
+            >
+              {clickable ? (
+                <button type="button" className="ds-inline" onClick={() => onStepSelect(step.id)}>
+                  {content}
+                </button>
+              ) : (
+                <div className="ds-inline">{content}</div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
       {current ? (
-        <span className="visually-hidden">مرحله جاری: {current.label}</span>
+        <p className="visually-hidden">
+          مرحله {steps.indexOf(current) + 1} از {steps.length}: {current.label}
+        </p>
       ) : null}
-    </ol>
+    </>
   );
 }

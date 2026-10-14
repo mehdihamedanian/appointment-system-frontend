@@ -45,7 +45,7 @@ export function AdminDashboardView({
   onRetryWidget: () => void;
 }) {
   const timezone = view.timezone;
-  const todayLabel = formatOperationalDateLabel(view.operationalDate, timezone);
+  const todayLabel = formatOperationalDateLabel(view.operationalDate);
   const lastUpdated = formatLastUpdatedLabel(view.lastUpdatedAt, timezone);
   const emptyDay = hasEmptyOperationalDay(view);
   const showQuickAdd =

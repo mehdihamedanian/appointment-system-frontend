@@ -9,6 +9,8 @@ import {
   minutesFromMidnight,
   parseHmToMinutes,
 } from "@/lib/admin/calendar-range";
+import { formatIsoDateLabel } from "@/lib/date-time/format";
+import { serverNow } from "@/lib/date-time/server-clock";
 import { AdminCalendarEventChip } from "@/features/admin/calendar/admin-calendar-event";
 import type {
   AdminCalendarColumn,
@@ -74,12 +76,9 @@ export function AdminCalendarTimeGrid({
   }
 
   const totalHeight = (dayEnd - dayStart) * PIXELS_PER_MINUTE;
-  const nowMinutes = view.serverNow
-    ? minutesFromMidnight(view.serverNow, view.timezone)
-    : minutesFromMidnight(new Date().toISOString(), view.timezone);
-  const todayIso = view.serverNow
-    ? isoDateInTimeZone(view.serverNow, view.timezone)
-    : isoDateInTimeZone(new Date().toISOString(), view.timezone);
+  const nowIso = view.serverNow ?? serverNow().toISOString();
+  const nowMinutes = minutesFromMidnight(nowIso, view.timezone);
+  const todayIso = isoDateInTimeZone(nowIso, view.timezone);
 
   const eventsByColumnDate = useMemo(() => {
     const map = new Map<string, AdminCalendarEventView[]>();
@@ -99,6 +98,9 @@ export function AdminCalendarTimeGrid({
   return (
     <div
       className="admin-calendar-time-grid"
+      role="region"
+      aria-label="جدول زمانی تقویم"
+      tabIndex={0}
       data-dnd="disabled"
       style={{ ["--admin-cal-height" as string]: `${totalHeight}px` }}
     >
@@ -108,7 +110,9 @@ export function AdminCalendarTimeGrid({
           displayColumns.map((col) => (
             <div key={`${date}-${col.id}`} className="admin-calendar-time-grid__col-head">
               {dates.length > 1 ? (
-                <span className="ltr-value text-caption">{date}</span>
+                <time className="text-caption" dateTime={date}>
+                  {formatIsoDateLabel(date, { weekday: true }) ?? date}
+                </time>
               ) : null}
               <strong>{col.label}</strong>
             </div>

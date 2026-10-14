@@ -35,17 +35,29 @@ describe("proxy navigation", () => {
     ).toEqual({ type: "next" });
   });
 
-  it("keeps authenticated visitors off anonymous auth routes", () => {
+  it("leaves auth routes to the client guard when a session cookie exists", () => {
+    // A stale cookie must not bounce /login back to a protected route.
     expect(
       resolveProxyNavigation({
         pathname: "/login",
-        redirectParam: "/appointments",
         hasSessionCookie: true,
       }),
-    ).toEqual({
-      type: "redirect",
-      location: "/appointments",
-    });
+    ).toEqual({ type: "next" });
+    expect(
+      resolveProxyNavigation({
+        pathname: "/admin/login",
+        hasSessionCookie: true,
+      }),
+    ).toEqual({ type: "next" });
+  });
+
+  it("lets cookie holders reach protected routes for client verification", () => {
+    expect(
+      resolveProxyNavigation({
+        pathname: "/booking",
+        hasSessionCookie: true,
+      }),
+    ).toEqual({ type: "next" });
   });
 
   it("sends anonymous visitors away from customer appointment lists", () => {

@@ -16,6 +16,9 @@ export type AdminRequirementBranchScope = "global" | "branch" | "inherited" | "u
  */
 export type AdminRequirementSpecificSemantics = "any_one" | "all" | "unknown";
 
+/** Backend `assignment_mode`. */
+export type AdminRequirementAssignmentMode = "automatic" | "manual";
+
 export type AdminServiceResourceRequirementResource = {
   id: string;
   reference?: string;
@@ -30,7 +33,11 @@ export type AdminServiceResourceRequirementItem = {
   key: string;
   reference?: string;
   resourceType: AdminResourceType;
+  /** Backend `resource_type_id`. */
+  resourceTypeId?: string;
   resourceTypeLabel: string;
+  assignmentMode?: AdminRequirementAssignmentMode;
+  label?: string;
   quantity: number;
   quantityMin?: number;
   quantityMax?: number;
@@ -75,6 +82,11 @@ export type AdminServiceResourceRequirementDraft = {
   key: string;
   reference?: string;
   resourceType: AdminResourceType;
+  /** Backend `resource_type_id`; required to save. */
+  resourceTypeId?: string;
+  /** Preserved from the Backend so a save never resets it. */
+  assignmentMode?: AdminRequirementAssignmentMode;
+  label?: string;
   quantity: number;
   necessity: AdminRequirementNecessity;
   selectionMode: AdminRequirementSelectionMode;

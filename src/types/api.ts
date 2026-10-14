@@ -18,4 +18,6 @@ export type ApiRequestOptions = {
   timeoutMs?: number;
   credentials?: RequestCredentials;
   query?: Record<string, ApiQueryValue>;
+  /** Set false where 401 is an expected answer (session probe, login), not an expiry. */
+  notifyUnauthorized?: boolean;
 };

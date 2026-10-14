@@ -15,6 +15,7 @@ export default function PublicError({
         title="خطا در صفحه عمومی"
         onRetry={reset}
         detail={error.digest ?? error.message}
+        reference={error.digest}
       />
     </div>
   );

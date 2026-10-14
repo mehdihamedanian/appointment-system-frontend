@@ -22,6 +22,25 @@ function readAdminPanelAccess(value: unknown): AdminPanelAccess {
   return "unknown";
 }
 
+function adminAccessFromAccountType(value: unknown): string | undefined {
+  const accountType = readString(value)?.toLowerCase();
+  if (accountType === "internal") {
+    return "granted";
+  }
+  if (accountType === "customer") {
+    return "denied";
+  }
+  return undefined;
+}
+
+function readFullName(source: Record<string, unknown>): string | undefined {
+  const parts = [
+    readString(source.firstName) ?? readString(source.first_name),
+    readString(source.lastName) ?? readString(source.last_name),
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
 function readPermissionCodes(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -48,7 +67,8 @@ function readUser(value: unknown): SessionUser | null {
     displayName:
       readString(source.displayName) ??
       readString(source.fullName) ??
-      readString(source.name),
+      readString(source.name) ??
+      readFullName(source),
     email: readString(source.email),
     phone: readString(source.phone) ?? readString(source.mobile),
     jobTitle:
@@ -62,7 +82,9 @@ function readUser(value: unknown): SessionUser | null {
         : readPermissionCodes(source.permissions);
     })(),
     adminPanelAccess: readAdminPanelAccess(
-      source.adminPanelAccess ?? source.canAccessAdmin,
+      source.adminPanelAccess ??
+        source.canAccessAdmin ??
+        adminAccessFromAccountType(source.accountType ?? source.account_type),
     ),
   };
 }

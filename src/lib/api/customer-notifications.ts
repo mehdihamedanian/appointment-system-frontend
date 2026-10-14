@@ -7,7 +7,10 @@ import {
   adaptUnreadCount,
 } from "@/lib/customer/notification-adapter";
 import { isSafePublicId } from "@/lib/public/booking-href";
+import { asList, unwrapPayload } from "@/lib/public/read";
+import { isRecord } from "@/lib/utilities/records";
 import { queryKeys } from "@/lib/query/keys";
+import { UNREAD_COUNT_POLL, boundedPollInterval } from "@/lib/query/policies";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   NOTIFICATION_LIST_LIMIT,
@@ -27,27 +30,33 @@ function missingNotificationError(): ApiError {
   });
 }
 
+/** Backend in-app inbox: offset pagination, `unread_only` filter, at most 100 per request. */
+const IN_APP_PATH = "/notifications/in-app";
+const IN_APP_MAX_LIMIT = 100;
+
 export async function fetchCustomerNotifications(
-  input: { page: number; read: NotificationReadFilter; cursor?: string },
+  input: { page: number; read: NotificationReadFilter },
   signal?: AbortSignal,
 ): Promise<CustomerNotificationListView> {
-  const params = new URLSearchParams();
-  params.set("page", String(input.page > 0 ? input.page : 1));
-  params.set("limit", String(NOTIFICATION_LIST_LIMIT));
-  if (input.read !== "all") {
-    params.set("read", input.read);
-  }
-  if (input.cursor) {
-    params.set("cursor", input.cursor);
-  }
-  const payload = await apiClient<unknown>(`/customer/notifications?${params.toString()}`, {
+  const page = input.page > 0 ? input.page : 1;
+  // One extra row tells whether a next page exists; the Backend returns no total.
+  const payload = await apiClient<unknown>(IN_APP_PATH, {
     method: "GET",
     signal,
+    query: {
+      limit: NOTIFICATION_LIST_LIMIT + 1,
+      offset: (page - 1) * NOTIFICATION_LIST_LIMIT,
+      unread_only: input.read === "unread" ? true : undefined,
+    },
   });
-  return adaptCustomerNotificationList(payload, {
-    page: input.page,
-    readFilter: input.read,
-  });
+  const view = adaptCustomerNotificationList(payload, { page, readFilter: input.read });
+  const pageItems = view.items.slice(0, NOTIFICATION_LIST_LIMIT);
+  return {
+    ...view,
+    hasMore: view.items.length > NOTIFICATION_LIST_LIMIT,
+    // The Backend can only filter unread rows, so "read" is applied to the fetched page.
+    items: input.read === "read" ? pageItems.filter((item) => item.read) : pageItems,
+  };
 }
 
 export function customerNotificationListQueryOptions(
@@ -70,7 +79,7 @@ export async function fetchNotificationUnreadCount(
   signal?: AbortSignal,
 ): Promise<NotificationUnreadCountView> {
   try {
-    const payload = await apiClient<unknown>("/customer/notifications/unread-count", {
+    const payload = await apiClient<unknown>(`${IN_APP_PATH}/unread-count`, {
       method: "GET",
       signal,
     });
@@ -91,6 +100,10 @@ export function notificationUnreadCountQueryOptions(userId: string) {
     refetchOnMount: "always" as const,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
+    refetchInterval: boundedPollInterval<NotificationUnreadCountView>(
+      () => true,
+      UNREAD_COUNT_POLL,
+    ),
     retry: false,
   };
 }
@@ -98,25 +111,12 @@ export function notificationUnreadCountQueryOptions(userId: string) {
 export async function fetchRecentNotifications(
   signal?: AbortSignal,
 ): Promise<CustomerNotificationView[]> {
-  try {
-    const params = new URLSearchParams({ limit: String(NOTIFICATION_RECENT_LIMIT) });
-    const payload = await apiClient<unknown>(
-      `/customer/notifications/recent?${params.toString()}`,
-      { method: "GET", signal },
-    );
-    return adaptRecentNotifications(payload, NOTIFICATION_RECENT_LIMIT);
-  } catch (error) {
-    if (error instanceof ApiError && isNotFoundError(error)) {
-      // Fallback: first page of inbox when dedicated recent endpoint is absent.
-      try {
-        const list = await fetchCustomerNotifications({ page: 1, read: "all" }, signal);
-        return list.items.slice(0, NOTIFICATION_RECENT_LIMIT);
-      } catch {
-        return [];
-      }
-    }
-    throw error;
-  }
+  const payload = await apiClient<unknown>(IN_APP_PATH, {
+    method: "GET",
+    signal,
+    query: { limit: NOTIFICATION_RECENT_LIMIT },
+  });
+  return adaptRecentNotifications(payload, NOTIFICATION_RECENT_LIMIT);
 }
 
 export function recentNotificationsQueryOptions(userId: string) {
@@ -138,11 +138,16 @@ export async function fetchCustomerNotificationDetail(
   if (!isSafePublicId(id)) {
     throw missingNotificationError();
   }
-  const payload = await apiClient<unknown>(`/customer/notifications/${encodeURIComponent(id)}`, {
+  // The Backend has no single-notification read; resolve it from the most recent page.
+  const payload = await apiClient<unknown>(IN_APP_PATH, {
     method: "GET",
     signal,
+    query: { limit: IN_APP_MAX_LIMIT },
   });
-  const view = adaptCustomerNotificationDetail(payload);
+  const match = asList(unwrapPayload(payload), ["items"]).find(
+    (item) => isRecord(item) && item.id === id,
+  );
+  const view = match ? adaptCustomerNotificationDetail(match) : null;
   if (!view) {
     throw missingNotificationError();
   }
@@ -171,22 +176,17 @@ export async function markNotificationRead(
   if (!isSafePublicId(id)) {
     throw missingNotificationError();
   }
-  const payload = await apiClient<unknown>(
-    `/customer/notifications/${encodeURIComponent(id)}/read`,
-    {
-      method: "POST",
-      signal,
-      body: {},
-    },
-  );
+  const payload = await apiClient<unknown>(`${IN_APP_PATH}/${encodeURIComponent(id)}/read`, {
+    method: "POST",
+    signal,
+  });
   return adaptCustomerNotificationDetail(payload);
 }
 
 export async function markAllNotificationsRead(signal?: AbortSignal): Promise<NotificationUnreadCountView> {
-  const payload = await apiClient<unknown>("/customer/notifications/read-all", {
+  const payload = await apiClient<unknown>(`${IN_APP_PATH}/read-all`, {
     method: "POST",
     signal,
-    body: {},
   });
   if (payload == null) {
     return { unreadCount: 0 };

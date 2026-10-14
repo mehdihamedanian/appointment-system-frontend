@@ -123,32 +123,47 @@ export function AdminResourceAllocationStep({
           {allocation?.automaticSummary ?? "خلاصه تخصیص پس از استعلام نهایی نمایش داده می‌شود."}
         </p>
       ) : (
-        allocation?.groups.map((group) => (
-          <fieldset key={group.id} className="admin-resource-group">
-            <legend>{group.label}</legend>
-            <div className="admin-resource-options">
-              {group.items.map((item) => {
-                const selected = selections[group.id]?.includes(item.id) ?? false;
-                return (
-                  <Checkbox
-                    key={item.id}
-                    name={`resource-${group.id}`}
-                    checked={selected}
-                    onChange={() => {
-                      const current = selections[group.id] ?? [];
-                      const next = selected
-                        ? current.filter((id) => id !== item.id)
-                        : [...current, item.id];
-                      onSelectionChange(group.id, next);
-                    }}
-                    label={item.name}
-                    description={item.required ? "الزامی" : undefined}
-                  />
-                );
-              })}
-            </div>
-          </fieldset>
-        ))
+        allocation?.groups.map((group) =>
+          group.single ? (
+            <RadioGroup key={group.id} legend={group.label}>
+              {group.items.map((item) => (
+                <Radio
+                  key={item.id}
+                  name={`resource-${group.id}`}
+                  value={item.id}
+                  checked={selections[group.id]?.[0] === item.id}
+                  onChange={() => onSelectionChange(group.id, [item.id])}
+                  label={item.name}
+                />
+              ))}
+            </RadioGroup>
+          ) : (
+            <fieldset key={group.id} className="admin-resource-group">
+              <legend>{group.label}</legend>
+              <div className="admin-resource-options">
+                {group.items.map((item) => {
+                  const selected = selections[group.id]?.includes(item.id) ?? false;
+                  return (
+                    <Checkbox
+                      key={item.id}
+                      name={`resource-${group.id}`}
+                      checked={selected}
+                      onChange={() => {
+                        const current = selections[group.id] ?? [];
+                        const next = selected
+                          ? current.filter((id) => id !== item.id)
+                          : [...current, item.id];
+                        onSelectionChange(group.id, next);
+                      }}
+                      label={item.name}
+                      description={item.required ? "الزامی" : undefined}
+                    />
+                  );
+                })}
+              </div>
+            </fieldset>
+          ),
+        )
       )}
       {loading ? <InlineLoading label="در حال به‌روزرسانی تخصیص" /> : null}
       {onRetry ? (

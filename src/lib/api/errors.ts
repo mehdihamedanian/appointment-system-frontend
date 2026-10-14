@@ -163,6 +163,29 @@ function normalizeFieldErrors(value: unknown): Record<string, string[]> | undefi
   return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined;
 }
 
+/** Backend envelope: `{ success: false, error: { code, message, details }, request_id }`. */
+function nestedError(body: unknown): Record<string, unknown> | undefined {
+  return isRecord(body) && isRecord(body.error) ? body.error : undefined;
+}
+
+function fieldErrorsFromDetails(value: unknown): Record<string, string[]> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const fieldErrors: Record<string, string[]> = {};
+  for (const item of value) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const field = readString(item.field)?.replace(/^(query|path|header)\./, "");
+    const message = readString(item.message);
+    if (field && message) {
+      (fieldErrors[field] ??= []).push(message);
+    }
+  }
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined;
+}
+
 function collectFieldErrorsFromUnknown(body: unknown): Record<string, string[]> | undefined {
   if (!isRecord(body)) {
     return undefined;
@@ -171,7 +194,8 @@ function collectFieldErrorsFromUnknown(body: unknown): Record<string, string[]> 
   return (
     normalizeFieldErrors(body.fieldErrors) ??
     normalizeFieldErrors(body.errors) ??
-    normalizeFieldErrors(body.violations)
+    normalizeFieldErrors(body.violations) ??
+    fieldErrorsFromDetails(nestedError(body)?.details)
   );
 }
 
@@ -180,7 +204,12 @@ function readErrorCode(body: unknown): string | undefined {
     return undefined;
   }
 
-  return readString(body.code) ?? readString(body.errorCode) ?? readString(body.error);
+  return (
+    readString(body.code) ??
+    readString(body.errorCode) ??
+    readString(body.error) ??
+    readString(nestedError(body)?.code)
+  );
 }
 
 function readErrorMessage(body: unknown, status: number): string {
@@ -215,7 +244,11 @@ function readRequestId(body: unknown, headers: Headers): string | undefined {
     return undefined;
   }
 
-  return readString(body.requestId) ?? readString(body.correlationId);
+  return (
+    readString(body.requestId) ??
+    readString(body.request_id) ??
+    readString(body.correlationId)
+  );
 }
 
 export function normalizeHttpError(

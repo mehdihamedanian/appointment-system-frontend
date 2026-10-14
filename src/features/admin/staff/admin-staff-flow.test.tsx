@@ -45,6 +45,9 @@ describe("Phase 29 admin staff E2E flow", () => {
       const url = String(path);
       const method = init?.method ?? "GET";
       if (url.includes("/public/business")) return { branchesEnabled: false };
+      if (url === "/admin/resources/types") {
+        return [{ id: "rt_staff", code: "staff", display_name: "Staff", is_system: true }];
+      }
       if (url.startsWith("/admin/staff?") || url === "/admin/staff") {
         if (method === "POST") {
           return {
@@ -106,7 +109,8 @@ describe("Phase 29 admin staff E2E flow", () => {
         return {
           id: "st_1",
           reference: "ST-1",
-          name: "کارمند ویرایش‌شده",
+          first_name: "کارمند",
+          last_name: "ویرایش‌شده",
           status: "active",
           bookable: true,
           customerVisible: false,
@@ -124,17 +128,32 @@ describe("Phase 29 admin staff E2E flow", () => {
     unmountList();
 
     const { unmount: unmountCreate } = renderWithProviders(<AdminStaffCreateScreen />, { session });
-    await screen.findByText("کارمند جدید");
-    await user.type(screen.getByLabelText(/نام نمایشی/), "کارمند جدید");
+    await waitFor(() => expect(screen.getByRole("button", { name: "ایجاد کارمند" })).toBeEnabled());
+    await user.type(screen.getByRole("textbox", { name: /^نام(?! خانوادگی)/ }), "کارمند");
+    await user.type(screen.getByRole("textbox", { name: /نام خانوادگی/ }), "جدید");
     await user.click(screen.getByRole("button", { name: "ایجاد کارمند" }));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/admin/staff/ST-1"));
+    const createCall = mockedClient.mock.calls.find(
+      ([path, init]) => path === "/admin/staff" && (init as { method?: string })?.method === "POST",
+    );
+    expect((createCall?.[1] as { body?: unknown })?.body).toMatchObject({
+      resourceTypeId: "rt_staff",
+      firstName: "کارمند",
+      lastName: "جدید",
+    });
     unmountCreate();
 
     pushMock.mockReset();
     const { unmount: unmountEdit } = renderWithProviders(<AdminStaffEditScreen />, { session });
-    await screen.findByDisplayValue("کارمند ویرایش‌شده");
+    await screen.findByDisplayValue("ویرایش‌شده");
     await user.click(screen.getByRole("button", { name: "ذخیره تغییرات" }));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/admin/staff/ST-1"));
+    const patchCall = mockedClient.mock.calls.find(
+      ([, init]) => (init as { method?: string })?.method === "PATCH",
+    );
+    expect((patchCall?.[1] as { body?: Record<string, unknown> })?.body).not.toHaveProperty(
+      "resourceTypeId",
+    );
     unmountEdit();
 
     replaceMock.mockReset();

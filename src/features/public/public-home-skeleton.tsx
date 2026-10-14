@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/feedback/loading-states";
 
 export function PublicHomeSkeleton() {
   return (
-    <div className="public-home" aria-busy="true" aria-live="polite" aria-label="در حال بارگذاری صفحه مجموعه">
+    <div className="public-home" role="status" aria-busy="true" aria-live="polite" aria-label="در حال بارگذاری صفحه مجموعه">
       <div className="public-hero">
         <div className="public-hero__copy">
           <Skeleton variant="title" />

@@ -2,7 +2,7 @@ import { asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
 import { isInternalResource } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { isRecord, readString } from "@/lib/utilities/records";
-import { formatCurrencyAmount } from "@/lib/date-time/format";
+import { formatCurrencyAmount, formatDecimalAmount } from "@/lib/date-time/format";
 import { PAYMENT_METHOD_COPY } from "@/types/payment";
 import type { BookingQuoteView, QuotePaymentMode } from "@/types/booking";
 import type {
@@ -33,6 +33,7 @@ const RESULT_STATUSES: Record<string, PaymentResultStatus> = {
   pending_payment: "pending",
   paid: "paid",
   success: "paid",
+  succeeded: "paid",
   deposit_paid: "deposit_paid",
   failed: "failed",
   cancelled: "cancelled",
@@ -174,8 +175,16 @@ export function adaptCoupon(payload: unknown): CouponView | undefined {
   }
   const source = isRecord(root.coupon) ? root.coupon : root;
   const code = asSafeText(source.code) ?? asSafeText(source.couponCode);
+  const validFlag = readBoolean(source.valid);
   const statusRaw = readString(source.status ?? source.result)?.toLowerCase().replace(/[\s-]+/g, "_");
-  const status = statusRaw ? COUPON_STATUSES[statusRaw] : undefined;
+  const status =
+    validFlag === true
+      ? "applied"
+      : validFlag === false
+        ? "invalid"
+        : statusRaw
+          ? COUPON_STATUSES[statusRaw]
+          : undefined;
   if (!code || !status) {
     return undefined;
   }
@@ -196,27 +205,43 @@ export function adaptPaymentSession(payload: unknown): PaymentSessionView | null
     }
   }
   const paymentId =
+    publicId(root.intent_id) ??
+    publicId(root.intentId) ??
     publicId(root.publicReference) ??
     publicId(root.reference) ??
     publicId(root.paymentId) ??
+    publicId(root.payment_id) ??
     publicId(root.id);
   if (!paymentId) {
     return null;
   }
-  const statusRaw = readString(root.status ?? root.result)?.toLowerCase().replace(/[\s-]+/g, "_");
+  const statusRaw = readString(
+    root.intent_status ?? root.payment_status ?? root.status ?? root.result,
+  )
+    ?.toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const redirectUrl =
+    readString(root.payment_url) ??
+    readString(root.redirectUrl) ??
+    readString(root.gatewayUrl);
+  const mapped = statusRaw ? RESULT_STATUSES[statusRaw] : undefined;
+  // A Backend intent stays `created`/`processing` until the gateway returns; a payment URL means
+  // the customer still has to visit the gateway.
+  const awaitingGateway = Boolean(redirectUrl) && (mapped === "created" || mapped === "processing");
   const view: PaymentSessionView = {
     paymentId,
-    status: (statusRaw && RESULT_STATUSES[statusRaw]) || (root.redirectUrl ? "redirect_required" : "unknown"),
+    status: awaitingGateway ? "redirect_required" : mapped || (redirectUrl ? "redirect_required" : "unknown"),
   };
   const publicReference = publicId(root.publicReference) ?? publicId(root.reference) ?? paymentId;
   if (publicReference) view.publicReference = publicReference;
-  const redirectUrl = readString(root.redirectUrl) ?? readString(root.gatewayUrl);
   if (redirectUrl) view.redirectUrl = redirectUrl;
-  const expiresAt = readString(root.expiresAt);
+  const expiresAt = readString(root.expiresAt) ?? readString(root.expires_at);
   if (expiresAt) view.expiresAt = expiresAt;
   const gatewayName = asSafeText(root.gatewayName) ?? asSafeText(root.gateway);
   if (gatewayName) view.gatewayName = gatewayName;
-  const payable = moneyLabel(root.payableNowLabel ?? root.amountLabel ?? (isRecord(root.pricing) ? root.pricing.payableNow : undefined));
+  const payable =
+    moneyLabel(root.payableNowLabel ?? root.amountLabel ?? (isRecord(root.pricing) ? root.pricing.payableNow : undefined)) ??
+    formatDecimalAmount(root.amount, readString(root.currency));
   if (payable) view.payableNowLabel = payable;
   const bookingReference = publicId(root.bookingReference) ?? publicId(root.appointmentId);
   if (bookingReference) view.bookingReference = bookingReference;

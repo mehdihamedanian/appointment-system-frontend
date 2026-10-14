@@ -68,6 +68,8 @@ export type AppointmentDetailActionsView = AppointmentActionsView & {
 export type CustomerAppointmentDetailView = {
   id: string;
   publicReference: string;
+  /** Backend appointment UUID; payment intents are addressed by it, not by the booking reference. */
+  appointmentId?: string;
   status: StatusKey;
   service: AppointmentDetailServiceSnapshot;
   provider?: AppointmentProviderSnapshot;

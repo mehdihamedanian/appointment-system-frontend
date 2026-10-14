@@ -28,6 +28,7 @@ export default function GlobalError({
           <UnexpectedErrorState
             onRetry={reset}
             detail={error.digest ?? error.message}
+            reference={error.digest}
           />
         </main>
       </body>

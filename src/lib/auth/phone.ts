@@ -11,6 +11,11 @@ export function normalizeIranMobile(value: string): string {
   return digits;
 }
 
+export function toE164IranMobile(value: string): string {
+  const phone = normalizeIranMobile(value);
+  return /^09\d{9}$/.test(phone) ? `+98${phone.slice(1)}` : phone;
+}
+
 export function isValidIranMobile(value: string): boolean {
   return /^09\d{9}$/.test(normalizeIranMobile(value));
 }

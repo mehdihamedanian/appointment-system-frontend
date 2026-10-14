@@ -29,6 +29,8 @@ export const routes = {
       `/appointments/${appointmentId}/reschedule`,
     appointmentReview: (appointmentId: string) =>
       `/appointments/${appointmentId}/review`,
+    appointmentPayment: (appointmentId: string) =>
+      `/appointments/${appointmentId}/payment`,
     payments: "/payments",
     paymentDetail: (paymentReference: string) => `/payments/${paymentReference}`,
     notifications: "/notifications",

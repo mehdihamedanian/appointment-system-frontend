@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/ui/data-display";
 import { ApiErrorState, SessionExpiredState } from "@/components/feedback/app-states";
 import { Skeleton } from "@/components/feedback/loading-states";
 import { useSession } from "@/features/auth/session-provider";
-import { verifyPayment } from "@/lib/api/payment";
+import { fetchPaymentStatus } from "@/lib/api/payment";
 import {
   isNetworkUncertaintyError,
   isSessionExpiredError,
@@ -30,6 +30,8 @@ import {
 import { formatAppointmentParts } from "@/lib/date-time/format";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { queryKeys } from "@/lib/query/keys";
+import { PAYMENT_STATUS_POLL, boundedPollInterval } from "@/lib/query/policies";
+import type { PaymentSessionView } from "@/types/payment";
 import { routes, LOGIN_PATH } from "@/constants/routes";
 
 export function PaymentResultScreen() {
@@ -44,13 +46,17 @@ export function PaymentResultScreen() {
 
   const query = useQuery({
     queryKey: queryKeys.booking.payment(reference),
-    queryFn: ({ signal }) => verifyPayment(reference, signal),
+    queryFn: ({ signal }) => fetchPaymentStatus(reference, signal),
     enabled: isSafePublicId(reference),
     staleTime: 0,
     gcTime: 30_000,
     refetchOnMount: "always",
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
+    refetchInterval: boundedPollInterval<PaymentSessionView>(
+      (data) => !data.alreadyPaid && (data.status === "pending" || data.status === "processing"),
+      PAYMENT_STATUS_POLL,
+    ),
     retry: false,
   });
 
@@ -58,7 +64,11 @@ export function PaymentResultScreen() {
   const error = query.isError ? toAppApiError(query.error) : undefined;
   const uiState = derivePaymentUiState({
     verifying: !result && (query.isPending || query.isFetching),
-    resultStatus: result?.alreadyPaid ? "paid" : result?.status,
+    resultStatus: result?.alreadyPaid
+      ? "paid"
+      : result?.status === "redirect_required"
+        ? "processing"
+        : result?.status,
     offline: error ? isNetworkUncertaintyError(error) : false,
     error: Boolean(error) && !(error && isNetworkUncertaintyError(error)),
   });
@@ -123,7 +133,7 @@ export function PaymentResultScreen() {
 
   if (query.isPending && !result) {
     return (
-      <div className="booking-payment-result" aria-busy="true" aria-label="در حال بررسی پرداخت">
+      <div className="booking-payment-result" role="status" aria-busy="true" aria-label="در حال بررسی پرداخت">
         <Skeleton variant="card" />
       </div>
     );

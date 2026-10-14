@@ -1,7 +1,8 @@
-import { formatCurrencyAmount } from "@/lib/date-time/format";
+import { routes } from "@/constants/routes";
+import { formatCurrencyAmount, formatDecimalAmount } from "@/lib/date-time/format";
 import { isInternalResource } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
-import { asSafeText, readUrl, unwrapPayload } from "@/lib/public/read";
+import { asSafeText, readBoolean, readUrl, unwrapPayload } from "@/lib/public/read";
 import { parseStatusKey } from "@/lib/status/status-map";
 import { isRecord, readString } from "@/lib/utilities/records";
 import type {
@@ -91,18 +92,29 @@ function adaptBranch(root: Record<string, unknown>): ConfirmationBranchView | un
 }
 
 export function adaptBookingConfirmation(payload: unknown): BookingConfirmationView | null {
-  const root = unwrapPayload(payload);
-  if (!isRecord(root) || isInternalResource(root)) {
+  const unwrapped = unwrapPayload(payload);
+  const nestedAppointment =
+    isRecord(unwrapped) && isRecord(unwrapped.appointment) ? unwrapped.appointment : undefined;
+  const root = nestedAppointment ?? (isRecord(unwrapped) ? unwrapped : null);
+  if (!root || isInternalResource(root)) {
     return null;
   }
   const id =
+    (isSafePublicId(readString(root.booking_reference))
+      ? readString(root.booking_reference)
+      : undefined) ??
+    (isSafePublicId(readString(root.bookingReference)) ? readString(root.bookingReference) : undefined) ??
     (isSafePublicId(readString(root.id)) ? readString(root.id) : undefined) ??
     (isSafePublicId(readString(root.appointmentId)) ? readString(root.appointmentId) : undefined) ??
     (isSafePublicId(readString(root.bookingId)) ? readString(root.bookingId) : undefined);
   const serviceSource = isRecord(root.service) && !isInternalResource(root.service) ? root.service : undefined;
-  const serviceName = asSafeText(serviceSource?.name) ?? asSafeText(root.serviceName);
+  const serviceName =
+    asSafeText(serviceSource?.name) ??
+    asSafeText(serviceSource?.title) ??
+    asSafeText(root.serviceName);
   const startsAt =
     readString(root.startsAt) ??
+    readString(root.starts_at) ??
     readString(root.startAt) ??
     readString(root.scheduledAt) ??
     (isRecord(root.slot) ? readString(root.slot.startsAt) : undefined);
@@ -119,21 +131,30 @@ export function adaptBookingConfirmation(payload: unknown): BookingConfirmationV
     serviceName,
     startsAt,
     pricing: {
-      totalLabel: moneyLabel(
-        pricingRoot.totalAmount ?? pricingRoot.totalLabel ?? root.totalAmountLabel,
-        currency,
-      ),
-      paidLabel: moneyLabel(pricingRoot.paidAmount ?? pricingRoot.paidLabel ?? root.paidAmountLabel, currency),
-      remainingLabel: moneyLabel(
-        pricingRoot.remainingAmount ?? pricingRoot.remainingLabel ?? root.remainingAmountLabel,
-        currency,
-      ),
+      totalLabel:
+        formatDecimalAmount(pricingRoot.total_amount ?? root.price_snapshot, currency) ??
+        moneyLabel(pricingRoot.totalAmount ?? pricingRoot.totalLabel ?? root.totalAmountLabel, currency),
+      paidLabel:
+        formatDecimalAmount(pricingRoot.successful_paid_amount, currency) ??
+        moneyLabel(pricingRoot.paidAmount ?? pricingRoot.paidLabel ?? root.paidAmountLabel, currency),
+      remainingLabel:
+        formatDecimalAmount(pricingRoot.outstanding_balance, currency) ??
+        moneyLabel(
+          pricingRoot.remainingAmount ?? pricingRoot.remainingLabel ?? root.remainingAmountLabel,
+          currency,
+        ),
       currency,
     },
   };
-  const reference = publicReference(root.reference) ?? publicReference(root.bookingReference);
+  const reference =
+    publicReference(root.reference) ??
+    publicReference(root.bookingReference) ??
+    publicReference(root.booking_reference);
   if (reference) view.reference = reference;
-  const paymentStatus = parseStatusKey(root.paymentStatus) ?? parseStatusKey(isRecord(root.payment) ? root.payment.status : undefined);
+  const paymentStatus =
+    parseStatusKey(root.paymentStatus) ??
+    parseStatusKey(root.payment_status) ??
+    parseStatusKey(isRecord(root.payment) ? root.payment.status ?? root.payment.payment_status : undefined);
   if (paymentStatus) view.paymentStatus = paymentStatus;
   const provider = adaptProvider(root);
   if (provider && provider.mode !== "not_applicable") view.provider = provider;
@@ -141,13 +162,15 @@ export function adaptBookingConfirmation(payload: unknown): BookingConfirmationV
   if (branch) view.branch = branch;
   const endsAt =
     readString(root.endsAt) ??
+    readString(root.ends_at) ??
     readString(root.endAt) ??
     (isRecord(root.slot) ? readString(root.slot.endsAt) : undefined);
   if (endsAt) view.endsAt = endsAt;
   const timezone = readString(root.timezone) ?? readString(root.timeZone);
   if (timezone) view.timezone = timezone;
-  if (typeof root.durationMinutes === "number" && Number.isInteger(root.durationMinutes)) {
-    view.durationMinutes = root.durationMinutes;
+  const duration = root.durationMinutes ?? root.duration_snapshot;
+  if (typeof duration === "number" && Number.isInteger(duration)) {
+    view.durationMinutes = duration;
   }
   const transactionReference = publicReference(
     root.transactionReference ?? (isRecord(root.payment) ? root.payment.transactionReference ?? root.payment.publicReference : undefined),
@@ -155,6 +178,10 @@ export function adaptBookingConfirmation(payload: unknown): BookingConfirmationV
   if (transactionReference) view.transactionReference = transactionReference;
   const instructions = asSafeText(root.instructions) ?? asSafeText(root.customerInstructions);
   if (instructions) view.instructions = instructions;
+  const actions = isRecord(root.actions) ? root.actions : undefined;
+  if (actions && readBoolean(actions.can_pay ?? actions.canPay) === true && reference) {
+    view.payHref = routes.customer.appointmentPayment(reference);
+  }
   return view;
 }
 

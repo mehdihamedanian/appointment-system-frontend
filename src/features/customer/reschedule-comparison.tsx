@@ -10,7 +10,7 @@ import type { RescheduleQuoteView } from "@/types/appointment-reschedule";
 import type { PolicySnapshot } from "@/types/appointment-detail";
 
 function PolicyBlock({ policy }: { policy: PolicySnapshot }) {
-  if (!policy.title && !policy.summary && !policy.deadlineLabel && !policy.feeLabel && !policy.refundLabel) {
+  if (!policy.summary && !policy.deadlineLabel && !policy.feeLabel && !policy.refundLabel && !policy.policyUrl) {
     return null;
   }
   return (

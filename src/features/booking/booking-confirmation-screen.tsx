@@ -44,7 +44,7 @@ function SummaryRow({ term, children }: { term: string; children: ReactNode }) {
 
 function ConfirmationSkeleton() {
   return (
-    <div className="booking-confirmation" aria-busy="true" aria-label="در حال بررسی وضعیت رزرو">
+    <div className="booking-confirmation" role="status" aria-busy="true" aria-label="در حال بررسی وضعیت رزرو">
       <Skeleton variant="card" />
       <Skeleton variant="line" />
       <Skeleton variant="line" />
@@ -239,7 +239,12 @@ export function BookingConfirmationScreen({ reference }: { reference: string }) 
       <ConfirmationDetails view={view} />
 
       <div className="booking-confirmation__actions">
-        <Button asChild>
+        {view.payHref ? (
+          <Button asChild>
+            <Link href={view.payHref}>پرداخت آنلاین</Link>
+          </Button>
+        ) : null}
+        <Button asChild variant={view.payHref ? "secondary" : undefined}>
           <Link href={routes.customer.dashboard}>بازگشت به داشبورد</Link>
         </Button>
         {view.branch?.directionsUrl ? (

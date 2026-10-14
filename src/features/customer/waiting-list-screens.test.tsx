@@ -319,10 +319,11 @@ describe("TimeStep waiting-list CTA", () => {
   });
 
   it("does not show join CTA for empty slots without Backend flag", async () => {
-    mockedClient.mockResolvedValue({ slots: [] });
+    mockedClient.mockResolvedValue({ data: { configuration_valid: true, days: [{ date: "2026-08-22", slots: [] }] } });
     renderWithProviders(
       <TimeStep
         serviceId="svc_1"
+        branchId="br_1"
         preference={{ type: "not_applicable" }}
         requiresBranch={false}
         providerMode="not_applicable"
@@ -336,10 +337,11 @@ describe("TimeStep waiting-list CTA", () => {
   });
 
   it("shows join CTA only when Backend sets waitingListJoinAllowed", async () => {
-    mockedClient.mockResolvedValue({ slots: [], waitingListJoinAllowed: true });
+    mockedClient.mockResolvedValue({ data: { configuration_valid: true, days: [{ date: "2026-08-22", slots: [] }], waitingListJoinAllowed: true } });
     renderWithProviders(
       <TimeStep
         serviceId="svc_1"
+        branchId="br_1"
         preference={{ type: "specific", providerId: "prv_1" }}
         requiresBranch={false}
         providerMode="optional"
@@ -351,7 +353,7 @@ describe("TimeStep waiting-list CTA", () => {
     const link = await screen.findByRole("link", { name: "پیوستن به لیست انتظار" });
     expect(link).toHaveAttribute(
       "href",
-      "/waiting-list/join?service=svc_1&date=2026-08-22&provider=prv_1",
+      "/waiting-list/join?service=svc_1&branch=br_1&date=2026-08-22&provider=prv_1",
     );
   });
 });
@@ -360,10 +362,11 @@ describe("waiting-list integration path", () => {
   it("covers empty availability → join → offer → accept → confirmation", async () => {
     const user = userEvent.setup();
     vi.spyOn(capabilities, "isCapabilityVisible").mockReturnValue(true);
-    mockedClient.mockResolvedValue({ slots: [], waitingListJoinAllowed: true });
+    mockedClient.mockResolvedValue({ data: { configuration_valid: true, days: [{ date: "2026-08-22", slots: [] }], waitingListJoinAllowed: true } });
     renderWithProviders(
       <TimeStep
         serviceId="svc_1"
+        branchId="br_1"
         preference={{ type: "not_applicable" }}
         requiresBranch={false}
         providerMode="not_applicable"

@@ -10,7 +10,8 @@ health only; the frontend Auth UI is built against this contract and adapters.
 | Name | Where used | Notes |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_BASE_URL` | API client | Public base URL including `/api/v1` if that is the prefix |
-| `SESSION_COOKIE_NAME` | `src/proxy.ts` | Name of the HttpOnly session cookie. Default: `session` |
+| `SESSION_COOKIE_NAME` | `src/proxy.ts`, session layer | Name of the HttpOnly session (refresh-token) cookie. Default: `session` |
+| `SESSION_MAX_AGE_SECONDS` | session layer | Session cookie lifetime; keep in line with the Backend refresh-token TTL. Default: 30 days |
 
 No secrets belong in the frontend environment.
 
@@ -21,11 +22,26 @@ The frontend never stores access tokens, refresh tokens, OTPs, or passwords in
 `localStorage` or `sessionStorage`. OTP codes are kept only in component state.
 Reset tokens are read from the URL once or held in memory; they are not logged.
 
-Expected session endpoint:
+The Backend issues bearer tokens only, so the cookies are owned by the Next.js
+session layer at `src/app/api/backend/[...path]/route.ts`. Browser API calls go
+to same-origin `/api/backend/*`:
 
-- `GET {API}/auth/session`
-- Cookie credentials included (`credentials: "include"`)
-- Server components forward the incoming `Cookie` header
+- `POST /api/backend/auth/login` → Backend `POST /auth/login`; stores the
+  refresh token in the `SESSION_COOKIE_NAME` cookie and the access token in
+  `<name>_access` (both HttpOnly, SameSite=Lax, Secure in production) and
+  returns only `{ data: { user } }`
+- `GET /api/backend/auth/session` → Backend `GET /auth/me` with the bearer
+  token; refreshes once (single-flight) when the access cookie has lapsed
+- `POST /api/backend/auth/logout` → Backend `POST /auth/logout` with the
+  refresh token; clears both cookies
+- Any other path is relayed to `NEXT_PUBLIC_API_BASE_URL` only, with
+  `Authorization: Bearer …` and an allow-list of request headers; Backend
+  cookies and other response headers are not relayed. Path segments containing
+  `/`, `\`, `%`, or control characters are rejected (the Backend would decode an
+  encoded slash and route to a blocked endpoint). Unsafe methods are rejected
+  when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` differs from
+  `Host` (or `NEXT_PUBLIC_SITE_URL`). Every response is `Cache-Control: private, no-store`
+- Server components call the Backend directly with the access cookie as bearer
 
 Suggested authenticated payload (adapter also accepts `data.user` / `session.user`):
 
@@ -62,7 +78,8 @@ Iranian mobile format sent by the frontend: `09XXXXXXXXX` (Latin digits).
 ### Login
 
 - `POST {API}/auth/login`
-- Body: `{ "phone": "09XXXXXXXXX", "password": "..." }`
+- Body: `{ "identifier": "+989XXXXXXXXX", "password": "..." }` (E.164; the backend
+  rejects unknown fields such as `phone` with `422`)
 - Success: session cookie + optional user payload (same shape as session)
 - Invalid credentials: `401` without revealing whether the phone exists
 - Inactive/blocked: code containing `BLOCK`, `INACTIVE`, `DISABLED`, or `SUSPEND`
@@ -119,7 +136,8 @@ The frontend does not assume other sessions are invalidated after reset.
 
 ### Admin login
 
-- `POST {API}/auth/admin/login` body: `{ "phone", "password" }`
+- Uses the shared `POST {API}/auth/login` (same body as customer login); the
+  backend has no separate admin login route
 - No admin registration
 - Success must set the session cookie and user with `adminPanelAccess: "granted"`
   (or omit it as `unknown`)
@@ -134,8 +152,38 @@ The frontend does not assume other sessions are invalidated after reset.
 
 ### Refresh
 
-- `POST {API}/auth/refresh` or cookie rotation on the session endpoint
-- Not called by Phase 3 UI yet; needed if access cookies are short-lived
+- `POST {API}/auth/refresh` is called only by the session layer; the browser
+  path `/api/backend/auth/refresh` is blocked
+
+### Deployment requirements (infrastructure / Backend)
+
+- **Multiple Next.js instances:** concurrent refreshes are de-duplicated in
+  process memory only (30 s grace). Two instances rotating the same refresh
+  token race, and the Backend revokes the session family on reuse. Until the
+  Backend accepts the just-rotated token for a short grace window, or a shared
+  store coordinates refresh, run one instance or use sticky sessions.
+- **Client IP:** the Backend sees every browser request as coming from the
+  Next.js server. Its login rate-limit key is identifier + client IP, so behind
+  this layer it degrades to identifier only (repeated failures for one phone
+  number throttle that account for everyone), IP-keyed limits are shared by all
+  users, and session/audit `ip_address` records show the Next.js host. Fixing
+  this needs the whole trusted chain: the edge proxy sets a single-valued
+  client-IP header that clients cannot inject (for example `X-Real-IP`
+  overwritten on every request), `TRUSTED_CLIENT_IP_HEADER` names that header
+  on the Next.js server (the session layer then sends it to the Backend as
+  `X-Forwarded-For`; list values and non-IPs are dropped), and the Backend's
+  `TRUSTED_PROXY_IPS` contains the Next.js server's egress address. Unset, no
+  client IP is forwarded and `next build` warns.
+- **Reverse proxy:** keep the public `Host` header (or set
+  `NEXT_PUBLIC_SITE_URL`) so same-origin mutations pass the origin check, and
+  terminate TLS so cookies are `Secure` (`NODE_ENV=production`).
+- **Permissions:** `GET /auth/me` returns `account_type` and `roles` only. The
+  UI separates customers from staff, but without effective permission codes
+  every staff user sees every admin screen; the Backend's `403` remains the
+  only enforcement. Exposing effective permission codes is required for
+  permission-based UI.
+- **Content-Security-Policy:** only `frame-ancestors 'none'` is set. A script
+  CSP needs per-request nonces for Next.js inline scripts.
 
 ## Standard error response
 
@@ -146,6 +194,12 @@ The client does not require an exact schema. It reads, when present:
 - `fieldErrors` / `errors` / `violations`
 - `requestId` / `correlationId`
 - `X-Request-Id` or `X-Correlation-Id` headers
+
+The current Backend envelope is
+`{ success: false, error: { code, message, details: [{ field, message, code }] }, request_id }`.
+The client reads `error.code`, `request_id`, and `error.details` (as field
+errors; `query.`/`path.`/`header.` prefixes are stripped). `error.message` is
+English developer text and is not shown; the UI keeps its Persian status copy.
 
 Normalized frontend error:
 
@@ -162,6 +216,87 @@ type AppApiError = {
 Status handling already includes `401`, `403`, `404`, `409`, `422`, `429`, and
 `5xx`. Raw Backend messages, stack traces, and internal codes are not shown in
 Auth forms.
+
+## Verified Backend mapping (local integration)
+
+This section reflects the running Backend (`/api/v1`) and supersedes the
+illustrative contracts further down where they disagree. Successful payloads
+are `{ success: true, data }`.
+
+### Connected
+
+| Frontend feature | Backend endpoint | Notes |
+| --- | --- | --- |
+| Admin dashboard metrics | `GET /admin/dashboard/summary?start_date&end_date&branch_id` | Operational day = `[date, date+1)` in the business timezone. Counts come from `appointments.status_counts`; revenue is `revenue.net_revenue` + `currency`. |
+| Admin dashboard analytics | `GET /admin/dashboard/summary` (same endpoint, analytics range) | Without an explicit range the Backend default period is used. Maps `customer_types.new_customers` and `popular_services`. A failure here becomes a widget error, not a page error. |
+| Admin dashboard recent appointments | `GET /admin/appointments?starts_from&starts_to&page=1&page_size=10` | Uses the `period.start`/`period.end` returned by the day summary. |
+| Dashboard default date | `GET /admin/settings` → `business.timezone` | Readable only by settings readers; other roles fall back to `NEXT_PUBLIC_BUSINESS_TIMEZONE` (never the browser timezone). |
+| Service catalog | `GET /services?status=active&page=1&page_size=100` | Requires `services.read`; anonymous visitors get 401 and see a sign-in state, not an empty catalog. `search` maps the `q` filter. |
+| Service detail | `GET /services/{id}` | `title` → name, `duration_minutes`, `price`, `deposit` (`0` = no deposit). |
+| Booking dates / slots | `GET /services/{id}/availability?branch_id&from&to` and `?branch_id&date` | `branch_id` is required. Slots have no id; the frontend uses `slot_<epoch-ms>` of `start`. `configuration_valid: false` is shown as "not configured", distinct from "no free time". |
+| Customer notifications | `GET /notifications/in-app?limit&offset&unread_only`, `GET /notifications/in-app/unread-count`, `POST /notifications/in-app/{id}/read`, `POST /notifications/in-app/read-all` | Requires a customer profile (`CUSTOMER_NOT_FOUND` for internal users). |
+| Customer profile | `GET/PATCH /customers/me` | Self-update is `first_name` / `last_name` only. Phone/email/OTP preference endpoints are not on the Backend. |
+| Customer dashboard | `GET /appointments/me/upcoming` | Composed from the upcoming list (no `/customer/dashboard`). Empty list vs failed request stay distinct. |
+| Customer appointments | `GET /appointments/me/upcoming`, `GET /appointments/me/history`, `GET /appointments/me/{booking_reference}` | `limit` → `page_size`. Timeline has no route; missing timeline stays empty. |
+| Customer booking | `POST /appointments/me` | Body: `service_id`, `branch_id`, `start_time` (from availability slot epoch), optional `staff_id` / `coupon_code` / `customer_notes`. Requires `Idempotency-Key`. |
+| Slot holds | `POST /holds`, `GET /holds/{token}` | Hold id is `token`. `expires_at` / `starts_at` / `state` are mapped in the hold adapter. |
+| Hold payment | `POST /holds/{token}/payments/intents` | `payment_type` `full` or `deposit`. Redirect URL is `payment_url`; status is `intent_status`. |
+| Appointment payment intent | `POST /appointments/{appointment_id}/payments/intents`, `GET /payment-intents/{intent_id}` | Intent create needs appointment UUID, not booking reference. |
+| Coupon check | `POST /coupons/validate` | Advisory only. There is no booking quote/preview route. |
+| Cancel / reschedule / review | `POST /appointments/me/{ref}/cancel`, `.../reschedule`, `GET/POST .../review` | Cancel/reschedule preview routes do not exist; the UI reuses appointment detail. Reschedule availability uses `GET /services/{id}/availability`. |
+| Waiting list (customer) | `POST /waiting-list`, `GET /waiting-list/me`, `GET /waiting-list/me/{id}`, `POST /waiting-list/offers/{id}/accept\|reject` | Join requires `preferred_date_from` / `preferred_date_to`. No leave/cancel-entry route. Eligibility and GET-offer-by-offer-id are not provided. |
+| Staff / resources / services (admin) | `/staff`, `/resources`, `/services` | Frontend `/admin/*` prefixes are rewritten. |
+| Users / roles / permissions | `/users`, `/roles`, `GET /permissions` | Catalog path `/admin/permissions/catalog` → `/permissions`. |
+| Calendar | `GET /calendar`, `/calendar/staff/{id}`, `/calendar/resources/{id}` | `view` is `daily\|weekly\|monthly`; anchor query is `date`. |
+| Settings | `GET/PATCH /admin/settings` | Section URLs collapse to the single resource. Nested `business` / `booking` / `payment` / `notifications`. |
+| Reports | dashboard `summary`, `staff-utilization`, `resource-utilization`, `peak-times` | No `/admin/reports` or export job API. |
+| Audit logs | `GET /admin/audit-logs` | Frontend `/admin/activity-logs` is rewritten. |
+| Manual booking confirm | `POST /admin/appointments` | Canonical manual booking. Availability uses `/services/{id}/availability`. |
+| Manual booking allocation | `GET /services/{id}/resource-requirements`, `GET .../{requirement_id}/eligible-resources?active_only=true&branch_id` → `ManualBookingCreate.resource_selections: [{requirement_id, resource_id}]` | One resource per non-staff requirement (staff comes from `staff_id`). Eligibility is static; the Backend rechecks availability under lock and rejects conflicts. |
+| Manual booking branches | `GET /staff?service_id&is_active=true`, `GET /staff/{id}` → `branches[]` | Union of the active branches of staff qualified for the service (admin-only data). Services with no qualified staff (for example room-only) get no branch until a branch list route exists. |
+| Reception customer create | `POST /customers` | Body `first_name`, `last_name`, `mobile` (E.164), optional `email`. Update (`PATCH /customers/{id}`) takes names and email only. Search uses `GET /customers?search=` (`q` is ignored by the Backend). |
+| Resource types | `GET /resources/types` | `[{id, code, display_name}]`; resource create needs `resource_type_id`. |
+| Service resource requirements | `GET/PUT /services/{id}/resource-requirements` | PUT replaces all: `{requirements: [{resource_type_id, specific_resource_id \| alternative_resource_ids[], quantity, is_required, assignment_mode, label, sort_order}]}`. Pinnable resources come from `GET /resources?resource_type_id&is_active=true`. No impact-preview route. |
+| Resource / staff blocks and time off | `GET/POST /{resources\|staff}/{id}/blocked-times`, `POST .../blocked-times/{block_id}/release`, `GET/POST/DELETE .../time-off` | Resource block and release verified end to end in `e2e/admin-resources.spec.ts`. |
+| Schedules | `/business/schedule`, `/branches/{id}/schedule`, `/staff/{id}/schedule`, `/resources/{id}/schedule` | Resource/staff schedule require `branch_id` plus `from`/`to`. |
+
+### Remaining mismatches (no Backend endpoint today)
+
+- **Public business info** (`/public/business`): no anonymous business
+  endpoint. The site falls back to the configured app identity. Business name,
+  timezone, and currency exist only in `GET/PATCH /admin/settings`.
+- **Anonymous catalog**: `/services` requires authentication, so the public
+  home and `/services` pages cannot list services for visitors.
+- **Branches**: no branch list/detail HTTP route (branch service exists but is
+  not mounted). Availability and `POST /appointments/me` require `branch_id`,
+  so customers can book only from a link that carries `?branch=`. Required:
+  `GET /services/{service_id}/branches` (or `GET /branches?service_id=`)
+  readable with `services.read`, returning `[{id, name, address?, phone?,
+  is_active}]` limited to active branches that offer the service, plus
+  `branches_enabled` on a business endpoint. Do not hardcode branch IDs.
+- **Admin appointment actions**: `AdminAppointmentDetail` has no
+  `allowed_actions`; status buttons would have to duplicate the Backend state
+  machine. Required: `allowed_actions: {confirm, check_in, complete, no_show,
+  cancel, reschedule}: bool` on detail (and optionally list items).
+- **Providers**: `/public/providers` and `/public/services/{id}/providers|branches`
+  have no Backend equivalent (404 is treated as "none").
+- **Booking quote / preview**: no quote API. Coupon validation is advisory via
+  `/coupons/validate`. Checkout path stays `unknown` until payment settings say
+  otherwise; confirm still uses `POST /appointments/me`.
+- **Login OTP**: `/auth/otp/*` is not mounted. `/auth/mobile/*` is logged-in
+  mobile verification, not login OTP.
+- **Waiting-list join flag**: availability does not return
+  `waitingListJoinAllowed`, so the time step never offers the join CTA.
+- **Waiting-list leave**, **GET offer by offer id**, **admin waiting-list CRUD**,
+  **notification templates/logs**, **customer payment history list**,
+  **payment receipts**, **report export**, **settings logo upload**,
+  **cancellation-preview**, **appointment timeline**.
+- **Notification detail**: no single-notification read; the detail page looks
+  the id up in the 100 most recent in-app notifications. Notifications carry
+  `entity_id` (UUID), not a booking reference, so no deep link is built.
+  The "read" filter is applied client-side (Backend only has `unread_only`).
+- **Dashboard alerts**: no alerts endpoint. Utilization and peak-times are
+  wired through the reports rewrite.
 
 ## Capabilities of this one business
 
@@ -412,9 +547,10 @@ shown as generic unavailable. If closed vs full is not distinguished, the UI
 does not invent that distinction.
 
 `timezone` and `serverNow` are required for a reliable “today” and past-day
-lock. Without them the UI falls back to the business timezone from
-`GET /public/business`, then to the device clock. Branch-specific timezone is
-not currently on the public branch payload.
+lock. Without them the UI falls back to the configured business timezone
+(`NEXT_PUBLIC_BUSINESS_TIMEZONE`) and the `Date`-header server clock, never the
+device timezone. Branch-specific timezone is not currently on the public
+branch payload.
 
 Suggested slots payload (ids are opaque tokens in `[A-Za-z0-9_-]{1,80}`;
 labels are display-only):
@@ -3356,10 +3492,31 @@ Phase 40 module keys expected from Backend (`PHASE40_EXPECTED_PERMISSION_KEYS`):
 
 
 
-The Design System calendar is Gregorian (`Date` + ISO `YYYY-MM-DD`). Jalali is
-**not** simulated by translating month names. A Jalali adapter is deferred to
-the localization phase (Phase 48) via `src/lib/date-time/calendar-adapter.ts`.
-This is a frontend concern, not a Backend API.
+Display calendar and API values are separate (Phase 48, `src/lib/date-time/`):
+
+- **Wire values stay Gregorian.** Query/body dates are ISO `YYYY-MM-DD`;
+  instants are sent with an explicit offset (`2026-08-22T09:00:00+03:30`).
+  Naive date-times from the Backend are read as business wall time, never
+  device time.
+- **Display calendar** comes from `NEXT_PUBLIC_CALENDAR_SYSTEM` (`persian`
+  default, or `gregorian`). The Jalali grid uses real conversion
+  (`jalali.ts`, cross-checked against Intl `ca-persian`); a visible Jalali
+  month (29–31 days) is fetched as one Gregorian `from`/`to` range, within the
+  Backend's 31-day availability limit. Month keys are `j1405-05` / `2026-08`.
+- **Timezone** resolution: payload `timezone` → branch `effective_timezone` →
+  business timezone → `NEXT_PUBLIC_BUSINESS_TIMEZONE` (default `Asia/Tehran`).
+  The device timezone is never used for business days.
+- **Server time**: there is no server-time endpoint and none is assumed. The
+  HTTP `Date` header of same-origin API responses gives a clock offset
+  (applied only for skews ≥ 5 s; one-second precision). Hold/offer/payment
+  `expires_at` from the Backend stay the source of truth for expiry.
+- **Past slots**: slots whose start passes while the list is open are marked
+  "past" and cannot be selected; the Backend still validates every hold.
+
+Open Backend gaps: no calendar-system setting is exposed to the client
+(`calendarType` in admin settings is not wired), and customer appointment,
+hold, and payment reads do not include `timezone`, so the configured business
+timezone is used for them.
 
 ## CORS and cookies
 

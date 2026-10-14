@@ -8,6 +8,7 @@ import {
   loadPublicBusiness,
   loadPublicServiceCatalog,
 } from "@/lib/api/public";
+import { isUnauthorizedError } from "@/lib/api/errors";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { buildServicesMetadata } from "@/lib/public/metadata";
 import { sanitizeServiceQuery } from "@/lib/public/service-search";
@@ -28,6 +29,16 @@ async function ServicesContent({ searchParams }: ServicesPageProps) {
   const businessResult = await loadPublicBusiness();
   const currency = businessResult.ok ? businessResult.data.currency : undefined;
   const initial = await loadPublicServiceCatalog(currency);
+
+  if (!initial.ok && isUnauthorizedError(initial.error)) {
+    return (
+      <RetryApiError
+        title="برای مشاهده خدمات وارد شوید"
+        description="فهرست خدمات فقط برای کاربران واردشده در دسترس است."
+        requestId={initial.error.requestId}
+      />
+    );
+  }
 
   if (!initial.ok) {
     return (

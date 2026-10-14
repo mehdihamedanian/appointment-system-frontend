@@ -3,6 +3,7 @@ import { adaptBookingQuote } from "@/lib/booking/adapters";
 import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
 import { isInternalResource, readId } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
+import { getStatusPresentation, parseStatusKey } from "@/lib/status/status-map";
 import { isRecord, readString } from "@/lib/utilities/records";
 import type {
   AdminManualBookingConfirmView,
@@ -159,7 +160,10 @@ export function adaptCustomerItem(value: unknown): AdminManualBookingCustomerVie
   const displayName =
     asSafeText(value.displayName) ??
     asSafeText(value.name) ??
-    [asSafeText(value.firstName), asSafeText(value.lastName)].filter(Boolean).join(" ");
+    [
+      asSafeText(value.firstName ?? value.first_name),
+      asSafeText(value.lastName ?? value.last_name),
+    ].filter(Boolean).join(" ");
   if (!id || !displayName) return null;
 
   const phone = readString(value.phone) ?? readString(value.mobile);
@@ -278,6 +282,44 @@ export function adaptAdminResourceAllocation(payload: unknown): AdminResourceAll
   };
 }
 
+const BACKEND_AUTOMATIC_SUMMARY = "سرویس هنگام ثبت، منابع آزاد مناسب را خودکار تخصیص می‌دهد.";
+
+/**
+ * Groups from `GET /services/{id}/resource-requirements` and each requirement's
+ * `eligible-resources`. Eligibility is static; the Backend rechecks availability on booking.
+ */
+export function adaptBackendResourceAllocation(
+  entries: { requirement: unknown; resources: unknown[] }[],
+): AdminResourceAllocationView {
+  const groups = entries.flatMap(({ requirement, resources }): AdminResourceAllocationGroupView[] => {
+    if (!isRecord(requirement)) return [];
+    const id = publicId(requirement.id);
+    if (!id) return [];
+    const items = resources.flatMap((resource): AdminResourceAllocationItemView[] => {
+      if (!isRecord(resource) || resource.is_active === false) return [];
+      const resourceId = publicId(resource.id);
+      const name = asSafeText(resource.name);
+      return resourceId && name
+        ? [{ id: resourceId, name, kind: adaptResourceKind(resource.resource_type_code) }]
+        : [];
+    });
+    if (items.length === 0) return [];
+    const label =
+      asSafeText(requirement.label) ?? asSafeText(requirement.resource_type_display_name) ?? "منابع";
+    return [{ id, label, mode: "select", items, single: true }];
+  });
+  if (groups.length === 0) {
+    return {
+      mode: "automatic",
+      groups: [],
+      canOverride: false,
+      automaticSummary: BACKEND_AUTOMATIC_SUMMARY,
+      unavailableReason: "not_required",
+    };
+  }
+  return { mode: "select", groups, canOverride: false, automaticSummary: BACKEND_AUTOMATIC_SUMMARY };
+}
+
 export function adaptAdminManualBookingQuote(payload: unknown): AdminManualBookingQuoteView {
   const base = adaptBookingQuote(payload);
   const quote: AdminManualBookingQuoteView = {
@@ -305,20 +347,29 @@ export function adaptAdminManualBookingConfirm(payload: unknown): AdminManualBoo
       quote: adaptAdminManualBookingQuote(root.quote ?? root),
     };
   }
+  const appointment = isRecord(root.appointment) ? root.appointment : undefined;
   const reference =
+    readString(appointment?.booking_reference) ??
     readString(root.reference) ??
     readString(root.appointmentReference) ??
     publicId(root.id);
-  const appointmentId = publicId(root.appointmentId) ?? reference;
+  const appointmentId = publicId(appointment?.id) ?? publicId(root.appointmentId) ?? reference;
   if (!reference) {
     return { outcome: "missing_endpoint" };
   }
+  const paymentStatus = readString(appointment?.payment_status) ?? readString(root.paymentStatus);
+  const paymentStatusKey = parseStatusKey(paymentStatus);
   return {
     outcome: "confirmed",
     reference,
     appointmentId,
-    paymentStatus: readString(root.paymentStatus),
-    paymentStatusLabel: asSafeText(root.paymentStatusLabel) ?? asSafeText(root.paymentStatus),
+    paymentStatus,
+    paymentStatusLabel:
+      asSafeText(root.paymentStatusLabel) ??
+      (paymentStatusKey && paymentStatusKey !== "unknown"
+        ? getStatusPresentation(paymentStatusKey).label
+        : undefined) ??
+      asSafeText(paymentStatus),
     allocationSummary: asSafeText(root.allocationSummary) ?? asSafeText(root.resourceSummary),
     quote: root.quote ? adaptAdminManualBookingQuote(root.quote) : undefined,
   };

@@ -1,50 +1,50 @@
+import { getCalendarAdapter, type CalendarSystem } from "@/lib/date-time/calendar-adapter";
 import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { serverNow } from "@/lib/date-time/server-clock";
+import {
+  addDaysToIsoDate,
+  formatIsoDate,
+  isoDateInZone,
+  isoDateWeekday,
+  minutesSinceMidnightInZone,
+  parseInstantInZone,
+  resolveTimeZone,
+} from "@/lib/date-time/zoned";
 import type { AdminCalendarRange } from "@/types/admin-calendar";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-export function parseIsoDateParts(iso: string): { y: number; m: number; d: number } | null {
-  if (!ISO_DATE.test(iso)) return null;
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  return { y, m, d };
-}
-
 export function toIsoDate(y: number, m: number, d: number): string {
-  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  return formatIsoDate(y, m, d);
 }
 
 export function addDaysIso(iso: string, days: number): string {
-  const parts = parseIsoDateParts(iso);
-  if (!parts) return iso;
-  const date = new Date(Date.UTC(parts.y, parts.m - 1, parts.d + days));
-  return toIsoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+  return addDaysToIsoDate(iso, days);
 }
 
-export function addMonthsIso(iso: string, months: number): string {
-  const parts = parseIsoDateParts(iso);
-  if (!parts) return iso;
-  const date = new Date(Date.UTC(parts.y, parts.m - 1 + months, 1));
-  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
-  const day = Math.min(parts.d, lastDay);
-  return toIsoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, day);
+/** Same day-of-month `months` later in the given calendar, clamped to the month length. */
+export function addMonthsIso(iso: string, months: number, calendar?: CalendarSystem): string {
+  const adapter = getCalendarAdapter(calendar);
+  const month = adapter.monthOf(iso);
+  const day = adapter.dayOfMonth(iso);
+  if (!month || !day) return iso;
+  const range = adapter.monthRange(adapter.addMonths(month, months));
+  const target = addDaysToIsoDate(range.from, day - 1);
+  return target > range.to ? range.to : target;
 }
 
-/** Day of week for ISO date in UTC noon (stable for date-only). 0=Sun … 6=Sat. */
+/** Day of week for an ISO date. 0=Sun … 6=Sat. */
 export function isoDayOfWeek(iso: string): number {
-  const parts = parseIsoDateParts(iso);
-  if (!parts) return 0;
-  return new Date(Date.UTC(parts.y, parts.m - 1, parts.d)).getUTCDay();
+  return isoDateWeekday(iso) ?? 0;
 }
 
 /**
  * Inclusive visible range for the given anchor date and range mode.
- * weekStartsOn: 0=Sunday … 6=Saturday (Backend).
+ * weekStartsOn: 0=Sunday … 6=Saturday (Backend). Months follow the display calendar.
  */
 export function visibleRangeFor(
   date: string,
   range: AdminCalendarRange,
   weekStartsOn = 6,
+  calendar?: CalendarSystem,
 ): { from: string; to: string } {
   if (range === "day") {
     return { from: date, to: date };
@@ -55,11 +55,9 @@ export function visibleRangeFor(
     const from = addDaysIso(date, -offset);
     return { from, to: addDaysIso(from, 6) };
   }
-  const parts = parseIsoDateParts(date);
-  if (!parts) return { from: date, to: date };
-  const from = toIsoDate(parts.y, parts.m, 1);
-  const last = new Date(Date.UTC(parts.y, parts.m, 0)).getUTCDate();
-  return { from, to: toIsoDate(parts.y, parts.m, last) };
+  const adapter = getCalendarAdapter(calendar);
+  const month = adapter.monthOf(date);
+  return month ? adapter.monthRange(month) : { from: date, to: date };
 }
 
 export function navigateCalendarDate(
@@ -67,7 +65,8 @@ export function navigateCalendarDate(
   range: AdminCalendarRange,
   direction: "prev" | "next" | "today",
   timezone?: string,
-  now: Date = new Date(),
+  now: Date = serverNow(),
+  calendar?: CalendarSystem,
 ): string {
   if (direction === "today") {
     return todayIsoInTimeZone(timezone, now);
@@ -75,7 +74,7 @@ export function navigateCalendarDate(
   const delta = direction === "next" ? 1 : -1;
   if (range === "day") return addDaysIso(date, delta);
   if (range === "week") return addDaysIso(date, delta * 7);
-  return addMonthsIso(date, delta);
+  return addMonthsIso(date, delta, calendar);
 }
 
 export function eachIsoDateInclusive(from: string, to: string): string[] {
@@ -91,28 +90,16 @@ export function eachIsoDateInclusive(from: string, to: string): string[] {
 }
 
 export function minutesFromMidnight(isoDateTime: string, timeZone?: string): number | null {
-  const date = new Date(isoDateTime);
-  if (Number.isNaN(date.getTime())) return null;
-  try {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timeZone || undefined,
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
-    const hour = Number(parts.find((p) => p.type === "hour")?.value ?? NaN);
-    const minute = Number(parts.find((p) => p.type === "minute")?.value ?? NaN);
-    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
-    return hour * 60 + minute;
-  } catch {
-    return date.getHours() * 60 + date.getMinutes();
-  }
+  const zone = resolveTimeZone(timeZone);
+  const instant = parseInstantInZone(isoDateTime, zone);
+  return instant ? minutesSinceMidnightInZone(instant, zone) : null;
 }
 
+/** Business-local calendar date of an instant. */
 export function isoDateInTimeZone(isoDateTime: string, timeZone?: string): string | null {
-  const date = new Date(isoDateTime);
-  if (Number.isNaN(date.getTime())) return null;
-  return todayIsoInTimeZone(timeZone, date);
+  const zone = resolveTimeZone(timeZone);
+  const instant = parseInstantInZone(isoDateTime, zone);
+  return instant ? isoDateInZone(instant, zone) : null;
 }
 
 export function parseHmToMinutes(hm: string): number | null {

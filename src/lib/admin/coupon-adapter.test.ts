@@ -127,6 +127,50 @@ describe("admin coupon adapter", () => {
     expect(body.draft).toBe(true);
   });
 
+  it("sends validity boundaries as business-local instants with an explicit offset", () => {
+    const input: AdminCouponFormInput = {
+      code: "TZ",
+      title: "TZ",
+      discountType: "percentage",
+      discountValue: "10",
+      startsAt: "2026-08-01",
+      startsTime: "09:00",
+      endsAt: "2026-08-01",
+      endsTime: "",
+      serviceScope: "all",
+      serviceIds: [],
+      branchIds: [],
+      draft: false,
+    };
+    const tehran = sanitizeAdminCouponBody({ ...input, timeZone: "Asia/Tehran" });
+    expect(tehran.startsAt).toBe("2026-08-01T09:00:00+03:30");
+    expect(tehran.endsAt).toBe("2026-08-01T23:59:00+03:30");
+    const newYork = sanitizeAdminCouponBody({ ...input, timeZone: "America/New_York" });
+    expect(newYork.startsAt).toBe("2026-08-01T09:00:00-04:00");
+    // Without a timezone the configured business zone is used, not the device zone.
+    expect(sanitizeAdminCouponBody(input).startsAt).toBe("2026-08-01T09:00:00+03:30");
+  });
+
+  it("compares coupon boundaries as instants in the business timezone", () => {
+    const base: AdminCouponFormInput = {
+      code: "X",
+      title: "Test",
+      discountType: "percentage",
+      discountValue: "10",
+      startsAt: "2026-08-01",
+      startsTime: "10:00",
+      endsAt: "2026-08-01",
+      endsTime: "10:30",
+      serviceScope: "all",
+      serviceIds: [],
+      branchIds: [],
+      draft: false,
+      timeZone: "Asia/Tehran",
+    };
+    expect(validateAdminCouponForm(base).endsAt).toBeUndefined();
+    expect(validateAdminCouponForm({ ...base, endsTime: "09:59" }).endsAt).toBeTruthy();
+  });
+
   it("detects duplicate and conflict errors", () => {
     expect(isDuplicateCouponError({ status: 409, code: "COUPON_CODE_EXISTS" })).toBe(true);
     expect(isAdminCouponConflict({ status: 409, code: "VERSION_CONFLICT" })).toBe(true);

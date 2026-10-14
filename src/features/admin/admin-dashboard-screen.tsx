@@ -9,22 +9,19 @@ import {
   ApiErrorState,
   PermissionDeniedState,
 } from "@/components/feedback/app-states";
-import { isCapabilityVisible } from "@/config/capabilities";
-import { getBusinessCapabilities } from "@/config/capabilities";
 import { routes } from "@/constants/routes";
 import { AdminDashboardSkeleton } from "@/features/admin/admin-dashboard-skeleton";
 import { AdminDashboardToolbar } from "@/features/admin/admin-dashboard-toolbar";
 import { AdminDashboardView } from "@/features/admin/admin-dashboard-view";
 import { PermissionGate } from "@/features/admin/permission-gate";
 import { useSession } from "@/features/auth/session-provider";
-import { adminDashboardQueryOptions } from "@/lib/api/admin-dashboard";
+import { adminDashboardQueryOptions, fetchBusinessTimezone } from "@/lib/api/admin-dashboard";
 import {
   isForbiddenError,
   isNotFoundError,
   isSessionExpiredError,
   toAppApiError,
 } from "@/lib/api/errors";
-import { fetchPublicBranches, fetchPublicBusiness } from "@/lib/api/public";
 import { parseAdminDashboardFilters } from "@/lib/admin/dashboard-filters";
 import { hasPermission } from "@/lib/permissions/access";
 import { queryKeys } from "@/lib/query/keys";
@@ -36,15 +33,16 @@ export function AdminDashboardScreen() {
   const userId = user?.id;
   const sessionReady = status === "authenticated" && Boolean(userId);
 
-  const businessQuery = useQuery({
-    queryKey: queryKeys.publicBusiness,
-    queryFn: ({ signal }) => fetchPublicBusiness(signal),
+  // Roles without settings access fall back to the browser timezone for the default day.
+  const timezoneQuery = useQuery({
+    queryKey: queryKeys.admin.businessTimezone(userId ?? "anonymous"),
+    queryFn: ({ signal }) => fetchBusinessTimezone(signal),
     staleTime: 60_000,
     retry: 0,
     enabled: sessionReady,
   });
 
-  const timezone = businessQuery.data?.timezone;
+  const timezone = timezoneQuery.data;
   const filters = useMemo(
     () => parseAdminDashboardFilters(searchParams, timezone),
     [searchParams, timezone],
@@ -52,21 +50,11 @@ export function AdminDashboardScreen() {
 
   const dashboardQuery = useQuery({
     ...adminDashboardQueryOptions(userId ?? "anonymous", filters, timezone),
-    enabled: sessionReady,
+    enabled: sessionReady && !timezoneQuery.isPending,
   });
 
-  const capabilities = getBusinessCapabilities();
-  const multipleBranchesVisible = isCapabilityVisible(capabilities, "multipleBranches");
-  const branchesEnabled = businessQuery.data?.branchesEnabled === true;
-  const showBranchFilter = multipleBranchesVisible && branchesEnabled;
-
-  const branchesQuery = useQuery({
-    queryKey: queryKeys.publicBranches,
-    queryFn: ({ signal }) => fetchPublicBranches(signal),
-    staleTime: 60_000,
-    retry: 0,
-    enabled: sessionReady && showBranchFilter,
-  });
+  // The Backend exposes no branch listing endpoint, so the branch filter stays hidden.
+  const showBranchFilter = false;
 
   const showResourceUtilization = hasPermission(user, "admin.resources.view");
 
@@ -121,7 +109,7 @@ export function AdminDashboardScreen() {
           showBranchFilter || dashboardQuery.data ? (
             <AdminDashboardToolbar
               filters={filters}
-              branches={branchesQuery.data ?? []}
+              branches={[]}
               showBranchFilter={showBranchFilter}
               analyticsRangeSupported
             />
@@ -150,11 +138,23 @@ export function AdminDashboardScreen() {
               />
             );
           }
+          if (error.code === "BUSINESS_SETTINGS_NOT_INITIALIZED") {
+            return (
+              <ApiErrorState
+                title="تنظیمات کسب‌وکار مقداردهی نشده است"
+                description="پیش از مشاهده داشبورد، تنظیمات کسب‌وکار باید با فرایند راه‌اندازی Backend مقداردهی شود."
+                requestId={error.requestId}
+                onRetry={() => {
+                  void dashboardQuery.refetch();
+                }}
+              />
+            );
+          }
           if (isNotFoundError(error)) {
             return (
               <ApiErrorState
                 title="داشبورد مدیریت در دسترس نیست"
-                description="Backend هنوز endpoint داشبورد مدیریت را ارائه نکرده است. جزئیات قرارداد در BACKEND_DEPENDENCIES.md ثبت شده است."
+                description="Backend مسیر خلاصه داشبورد را پیدا نکرد. جزئیات قرارداد در BACKEND_DEPENDENCIES.md ثبت شده است."
                 requestId={error.requestId}
                 onRetry={() => {
                   void dashboardQuery.refetch();
@@ -179,7 +179,7 @@ export function AdminDashboardScreen() {
         <AdminDashboardView
           view={dashboardQuery.data}
           user={user}
-          branches={branchesQuery.data ?? []}
+          branches={[]}
           showBranchFilter={showBranchFilter}
           showResourceUtilization={showResourceUtilization}
           refreshing={dashboardQuery.isFetching && !dashboardQuery.isPending}

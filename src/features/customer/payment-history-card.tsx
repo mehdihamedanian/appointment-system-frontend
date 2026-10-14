@@ -23,9 +23,9 @@ export function PaymentHistoryCard({ item }: { item: PaymentHistoryItemView }) {
         <StatusBadge status={item.status} />
         {item.refundStatus ? <StatusBadge status={item.refundStatus} /> : null}
       </div>
-      <h3 id={headingId} className="payment-card__amount">
+      <h2 id={headingId} className="payment-card__amount">
         {item.amountLabel}
-      </h3>
+      </h2>
       {item.timestampLabel ? <p>{item.timestampLabel}</p> : null}
       {item.classificationLabel ? <p className="text-caption">{item.classificationLabel}</p> : null}
       {item.methodLabel ? <p className="text-caption">{item.methodLabel}</p> : null}

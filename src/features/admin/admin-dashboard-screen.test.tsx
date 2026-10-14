@@ -27,37 +27,87 @@ const mockedClient = vi.mocked(apiClient);
 
 function dashboardPayload() {
   return {
-    operationalDate: "2026-08-23",
-    timezone: "Asia/Tehran",
-    lastUpdatedAt: "2026-08-23T08:00:00.000Z",
-    operational: {
-      todayAppointments: { value: 5 },
-      upcoming: { value: 2 },
-      needingAction: { value: 1 },
-      completed: { value: 3 },
-      cancelled: { value: 0 },
-      noShow: { value: 0 },
-      todayRevenue: { amountLabel: "۵۰۰٬۰۰۰ ریال" },
-    },
-    recentAppointments: {
-      items: [
+    success: true,
+    data: {
+      period: {
+        start: "2026-08-22T20:30:00Z",
+        end: "2026-08-23T20:30:00Z",
+        timezone: "Asia/Tehran",
+        start_date: "2026-08-23",
+        end_date: "2026-08-24",
+      },
+      filters: { branch_id: null },
+      generated_at: "2026-08-23T08:00:00Z",
+      appointments: {
+        total_count: 5,
+        status_counts: {
+          pending: 1,
+          confirmed: 1,
+          checked_in: 0,
+          in_progress: 0,
+          completed: 3,
+          cancelled: 0,
+          no_show: 0,
+          rescheduled: 0,
+        },
+      },
+      revenue: {
+        currency: "IRR",
+        gross_collected: "500000.00",
+        refunded_amount: "0.00",
+        net_revenue: "500000.00",
+      },
+      customer_types: { new_customers: 2, returning_customers: 1 },
+      popular_services: [
         {
-          id: "apt_1",
-          customerName: "سارا محمدی",
-          serviceName: "ویزیت",
-          startsAt: "2026-08-23T09:00:00.000Z",
-          status: "confirmed",
-          paymentStatus: "paid",
+          service_id: "svc_1",
+          title: "ویزیت",
+          completed_appointment_count: 3,
+          share_percentage: "100.00",
         },
       ],
     },
-    analytics: {
-      newCustomers: { value: 2 },
-      peakHours: {
-        items: [{ hourLabel: "09:00", countLabel: "3", barPercent: 60 }],
-      },
+  };
+}
+
+function appointmentsPayload() {
+  return {
+    success: true,
+    data: {
+      items: [
+        {
+          id: "7d0c6f1e-0000-4000-8000-000000000001",
+          booking_reference: "APT1",
+          starts_at: "2026-08-23T09:00:00Z",
+          ends_at: "2026-08-23T09:30:00Z",
+          status: "confirmed",
+          booking_source: "online",
+          created_at: "2026-08-20T09:00:00Z",
+          customer: { id: "cus_1", display_name: "سارا محمدی" },
+          service: { id: "svc_1", title: "ویزیت" },
+          branch: { id: "br_1", name: "شعبه مرکزی" },
+          staff: [],
+          payment_status: "paid",
+        },
+      ],
+      meta: { page: 1, page_size: 10, total_items: 1, total_pages: 1 },
     },
   };
+}
+
+function settingsPayload() {
+  return { success: true, data: { business: { timezone: "Asia/Tehran" } } };
+}
+
+function backendResponse(path: unknown) {
+  const value = String(path);
+  if (value.startsWith("/admin/dashboard/summary")) {
+    return dashboardPayload();
+  }
+  if (value.startsWith("/admin/appointments")) {
+    return appointmentsPayload();
+  }
+  return settingsPayload();
 }
 
 describe("AdminDashboardScreen", () => {
@@ -73,12 +123,7 @@ describe("AdminDashboardScreen", () => {
   });
 
   it("renders operational metrics from backend", async () => {
-    mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return dashboardPayload();
-      }
-      return { name: "کلینیک", timezone: "Asia/Tehran", branchesEnabled: false };
-    });
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
 
     renderWithProviders(<AdminDashboardScreen />, {
       session: createSessionValue({
@@ -89,8 +134,47 @@ describe("AdminDashboardScreen", () => {
 
     expect(await screen.findByText("نوبت‌های امروز")).toBeInTheDocument();
     expect(screen.getByText("۵")).toBeInTheDocument();
-    expect(screen.getByText("۵۰۰٬۰۰۰ ریال")).toBeInTheDocument();
+    expect(screen.getByText(/۵۰۰٬۰۰۰/)).toBeInTheDocument();
     expect(screen.getAllByText("سارا محمدی").length).toBeGreaterThan(0);
+  });
+
+  it("requests the operational day as a half-open summary range", async () => {
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
+    renderWithProviders(<AdminDashboardScreen />);
+    await screen.findByText("نوبت‌های امروز");
+
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/admin/dashboard/summary",
+      expect.objectContaining({
+        query: { start_date: "2026-08-23", end_date: "2026-08-24" },
+      }),
+    );
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/admin/appointments",
+      expect.objectContaining({
+        query: expect.objectContaining({
+          starts_from: "2026-08-22T20:30:00Z",
+          starts_to: "2026-08-23T20:30:00Z",
+        }),
+      }),
+    );
+  });
+
+  it("shows a distinct state when business settings are not initialized", async () => {
+    mockedClient.mockImplementation(async (path) => {
+      if (String(path).startsWith("/admin/dashboard/summary")) {
+        throw new ApiError({
+          status: 404,
+          code: "BUSINESS_SETTINGS_NOT_INITIALIZED",
+          message: "not initialized",
+        });
+      }
+      return backendResponse(path);
+    });
+    renderWithProviders(<AdminDashboardScreen />);
+    expect(
+      await screen.findByText("تنظیمات کسب‌وکار مقداردهی نشده است"),
+    ).toBeInTheDocument();
   });
 
   it("shows permission denied for forbidden dashboard", async () => {
@@ -106,10 +190,10 @@ describe("AdminDashboardScreen", () => {
 
   it("shows unavailable metrics as em dash", async () => {
     mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return { operationalDate: "2026-08-23", operational: {} };
+      if (String(path).startsWith("/admin/dashboard/summary")) {
+        return { success: true, data: { period: { start_date: "2026-08-23" } } };
       }
-      return { name: "کلینیک", timezone: "Asia/Tehran" };
+      return backendResponse(path);
     });
     renderWithProviders(<AdminDashboardScreen />);
     const dashes = await screen.findAllByText("—");
@@ -125,15 +209,7 @@ describe("AdminDashboardScreen", () => {
   });
 
   it("uses distinct query keys when branch filter changes", async () => {
-    mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return dashboardPayload();
-      }
-      if (String(path).includes("/public/branches")) {
-        return [{ id: "br_1", name: "شعبه مرکزی" }];
-      }
-      return { name: "کلینیک", timezone: "Asia/Tehran", branchesEnabled: true };
-    });
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -158,24 +234,14 @@ describe("AdminDashboardScreen", () => {
   });
 
   it("hides quick add when manual booking route is disabled", async () => {
-    mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return { ...dashboardPayload(), manualBookingEnabled: true };
-      }
-      return { name: "کلینیک", timezone: "Asia/Tehran" };
-    });
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
     renderWithProviders(<AdminDashboardScreen />);
     await screen.findByText("نوبت‌های امروز");
     expect(screen.queryByRole("link", { name: "ثبت نوبت جدید" })).not.toBeInTheDocument();
   });
 
   it("refetches dashboard on manual refresh", async () => {
-    mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return dashboardPayload();
-      }
-      return { name: "کلینیک", timezone: "Asia/Tehran" };
-    });
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
 
     const user = userEvent.setup();
     renderWithProviders(<AdminDashboardScreen />);
@@ -196,12 +262,7 @@ describe("AdminDashboardScreen", () => {
   });
 
   it("denies dashboard when granular permission is missing", async () => {
-    mockedClient.mockImplementation(async (path) => {
-      if (String(path).includes("/admin/dashboard")) {
-        return dashboardPayload();
-      }
-      return { name: "کلینیک", timezone: "Asia/Tehran" };
-    });
+    mockedClient.mockImplementation(async (path) => backendResponse(path));
 
     renderWithProviders(<AdminDashboardScreen />, {
       session: createSessionValue({

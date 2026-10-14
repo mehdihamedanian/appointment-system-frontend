@@ -20,6 +20,7 @@ import {
   type AdminResourceScheduleMode,
   type AdminResourceScheduleSummary,
   type AdminResourceType,
+  type AdminResourceTypeOption,
 } from "@/types/admin-resource";
 
 function publicId(value: unknown): string | undefined {
@@ -41,6 +42,7 @@ export function adaptAdminResourceType(value: unknown): AdminResourceType {
   if (!raw) return "unknown";
   const map: Record<string, AdminResourceType> = {
     staff: "staff",
+    specialist: "staff",
     provider: "staff",
     employee: "staff",
     room: "room",
@@ -143,6 +145,27 @@ function adaptAllowedActions(value: unknown): AdminResourceAllowedActions {
   };
 }
 
+/** Backend `ResourceRead.resource_type` is an object; `ResourceListItem` flattens it. */
+function readTypeCode(value: Record<string, unknown>): unknown {
+  const nested = value.resourceType ?? value.resource_type;
+  if (isRecord(nested)) return nested.code;
+  return value.type ?? value.kind ?? nested ?? value.resource_type_code;
+}
+
+function readTypeDisplayName(value: Record<string, unknown>): string | undefined {
+  const nested = value.resourceType ?? value.resource_type;
+  if (isRecord(nested)) return asSafeText(nested.display_name) ?? asSafeText(nested.displayName);
+  return asSafeText(value.resource_type_display_name);
+}
+
+function firstBranch(value: Record<string, unknown>): { id: string; name: string } | undefined {
+  const source = isRecord(value.branch) ? value.branch : asList(value.branches, ["items"])[0];
+  if (!isRecord(source)) return undefined;
+  const id = publicId(source.id);
+  const name = asSafeText(source.name);
+  return id && name ? { id, name } : undefined;
+}
+
 function adaptListItem(value: unknown): AdminResourceListItem | null {
   if (!isRecord(value)) return null;
   const id = publicId(value.id) ?? publicId(value.resourceId);
@@ -150,16 +173,19 @@ function adaptListItem(value: unknown): AdminResourceListItem | null {
     readString(value.reference) ?? readString(value.resourceReference) ?? id;
   const name = asSafeText(value.name) ?? asSafeText(value.title);
   if (!id || !reference || !name) return null;
-  const type = adaptAdminResourceType(value.type ?? value.kind ?? value.resourceType);
+  const type = adaptAdminResourceType(readTypeCode(value));
   const lifecycle = adaptAdminResourceLifecycle(
-    value.lifecycle ?? value.status ?? value.active ?? value.state,
+    value.lifecycle ?? value.status ?? value.active ?? value.is_active ?? value.state,
   );
   const item: AdminResourceListItem = {
     id,
     reference,
     name,
     type,
-    typeLabel: asSafeText(value.typeLabel) ?? ADMIN_RESOURCE_TYPE_LABELS[type],
+    typeLabel:
+      asSafeText(value.typeLabel) ??
+      (type === "unknown" ? readTypeDisplayName(value) : undefined) ??
+      ADMIN_RESOURCE_TYPE_LABELS[type],
     lifecycle,
     lifecycleLabel:
       asSafeText(value.lifecycleLabel) ?? ADMIN_RESOURCE_LIFECYCLE_LABELS[lifecycle],
@@ -167,11 +193,8 @@ function adaptListItem(value: unknown): AdminResourceListItem | null {
   };
   const description = asSafeText(value.description);
   if (description) item.description = description;
-  if (isRecord(value.branch)) {
-    const branchId = publicId(value.branch.id);
-    const branchName = asSafeText(value.branch.name);
-    if (branchId && branchName) item.branch = { id: branchId, name: branchName };
-  }
+  const branch = firstBranch(value);
+  if (branch) item.branch = branch;
   const capacity = adaptCapacity(value.capacity);
   if (capacity) item.capacity = capacity;
   if (isRecord(value.schedule) || value.scheduleSummary) {
@@ -368,6 +391,28 @@ export function isDuplicateResourceError(error: { status?: number; code?: string
   }
   const code = error.code?.toUpperCase() ?? "";
   return code.includes("DUPLICATE") || code.includes("EXISTS");
+}
+
+const HUMAN_RESOURCE_TYPE_CODES = new Set(["staff", "specialist"]);
+
+/** `GET /resources/types` → selectable options; IDs come only from the Backend. */
+export function adaptAdminResourceTypeOptions(payload: unknown): AdminResourceTypeOption[] {
+  return asList(unwrapPayload(payload), ["items", "types"])
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const id = publicId(item.id);
+      const code = readString(item.code)?.toLowerCase();
+      if (!id || !code) return null;
+      const type = adaptAdminResourceType(code);
+      const label =
+        code === "specialist"
+          ? "متخصص"
+          : type !== "unknown"
+            ? ADMIN_RESOURCE_TYPE_LABELS[type]
+            : asSafeText(item.display_name) ?? asSafeText(item.displayName) ?? code;
+      return { id, code, type, label, human: HUMAN_RESOURCE_TYPE_CODES.has(code) };
+    })
+    .filter((item): item is AdminResourceTypeOption => Boolean(item));
 }
 
 /** Internal operational types must never be treated as customer-visible providers. */

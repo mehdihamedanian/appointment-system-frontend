@@ -121,7 +121,11 @@ function adaptProviderPreference(root: Record<string, unknown>): ProviderPrefere
   if (typeRaw === "not_applicable" || typeRaw === "omitted") {
     return { type: "not_applicable" };
   }
-  const providerId = publicId(nested.providerId) ?? publicId(nested.id);
+  const providerId =
+    publicId(nested.providerId) ??
+    publicId(nested.staff_preference_id) ??
+    publicId(root.staff_preference_id) ??
+    publicId(nested.id);
   if (providerId) {
     return { type: "specific", providerId };
   }
@@ -220,8 +224,13 @@ export function adaptWaitingListEntry(value: unknown): WaitingListEntryView | nu
   const serviceName =
     asSafeText(serviceSource?.name) ??
     asSafeText(serviceSource?.title) ??
-    asSafeText(value.serviceName);
-  const createdAt = readString(value.createdAt) ?? readString(value.joinedAt);
+    asSafeText(value.serviceName) ??
+    (publicId(value.serviceId ?? value.service_id) ? "خدمت" : undefined);
+  const createdAt =
+    readString(value.createdAt) ??
+    readString(value.created_at) ??
+    readString(value.joinedAt) ??
+    readString(value.joined_at);
   if (!id || !serviceName || !createdAt) {
     return null;
   }
@@ -236,7 +245,8 @@ export function adaptWaitingListEntry(value: unknown): WaitingListEntryView | nu
     canLeave: readBoolean(value.canLeave) ?? (status === "active" || status === "offered"),
     canViewOffer: false,
   };
-  const serviceId = publicId(serviceSource?.id) ?? publicId(value.serviceId);
+  const serviceId =
+    publicId(serviceSource?.id) ?? publicId(value.serviceId) ?? publicId(value.service_id);
   if (serviceId) entry.service.id = serviceId;
   const preference = adaptProviderPreference(value);
   const providerName =
@@ -322,9 +332,13 @@ export function adaptWaitingListOffer(payload: unknown): WaitingListOfferView | 
     isRecord(root.service) && !isInternalResource(root.service) ? root.service : undefined;
   const serviceName =
     asSafeText(serviceSource?.name) ??
-    asSafeText(root.serviceName);
-  const startsAt = readString(root.startsAt) ?? readString(root.slotStartsAt);
-  const expiresAt = readString(root.expiresAt);
+    asSafeText(root.serviceName) ??
+    asSafeText(root.service_title);
+  const startsAt =
+    readString(root.startsAt) ??
+    readString(root.start_at) ??
+    readString(root.slotStartsAt);
+  const expiresAt = readString(root.expiresAt) ?? readString(root.expires_at);
   if (!id || !serviceName || !startsAt || !expiresAt) {
     return null;
   }
@@ -344,7 +358,10 @@ export function adaptWaitingListOffer(payload: unknown): WaitingListOfferView | 
   };
   const serviceId = publicId(serviceSource?.id) ?? publicId(root.serviceId);
   if (serviceId) offer.service.id = serviceId;
-  const entryReference = publicId(root.entryReference) ?? publicId(root.waitingListEntryId);
+  const entryReference =
+    publicId(root.entryReference) ??
+    publicId(root.waitingListEntryId) ??
+    publicId(root.waiting_list_entry_id);
   if (entryReference) offer.entryReference = entryReference;
   const providerName =
     asSafeText(isRecord(root.provider) ? root.provider.name : undefined) ??

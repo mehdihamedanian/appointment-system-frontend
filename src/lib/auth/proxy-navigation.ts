@@ -1,54 +1,39 @@
 import { ADMIN_LOGIN_PATH, LOGIN_PATH } from "@/constants/routes";
-import {
-  isAdminRoute,
-  isAnonymousOnlyAuthRoute,
-  isCustomerRoute,
-} from "@/lib/auth/route-access";
-import {
-  defaultDestination,
-  getSafeInternalRedirect,
-  withRedirectParam,
-} from "@/lib/auth/safe-redirect";
+import { isAdminRoute, isCustomerRoute } from "@/lib/auth/route-access";
+import { withRedirectParam } from "@/lib/auth/safe-redirect";
 
 export type ProxyDecision =
   | { type: "next" }
   | { type: "redirect"; location: string };
 
+/**
+ * Cookie presence is not proof of a valid session, so the proxy only performs
+ * the safe redirect (no cookie → login). Moving a signed-in visitor off auth
+ * pages is left to the client GuestGuard, which acts on the verified session;
+ * doing it here would loop whenever the cookie is stale.
+ */
 export function resolveProxyNavigation(input: {
   pathname: string;
   search?: string;
-  redirectParam?: string | null;
   hasSessionCookie: boolean;
 }): ProxyDecision {
-  const { pathname, search = "", redirectParam, hasSessionCookie } = input;
+  const { pathname, search = "", hasSessionCookie } = input;
 
-  if (hasSessionCookie && isAnonymousOnlyAuthRoute(pathname)) {
-    const audience = pathname.startsWith("/admin") ? "admin" : "customer";
-    return {
-      type: "redirect",
-      location: getSafeInternalRedirect(
-        redirectParam,
-        defaultDestination(audience),
-        audience,
-      ),
-    };
+  if (hasSessionCookie) {
+    return { type: "next" };
   }
 
-  if (!hasSessionCookie && isCustomerRoute(pathname)) {
+  if (isCustomerRoute(pathname)) {
     return {
       type: "redirect",
       location: withRedirectParam(LOGIN_PATH, `${pathname}${search}`, "customer"),
     };
   }
 
-  if (!hasSessionCookie && isAdminRoute(pathname)) {
+  if (isAdminRoute(pathname)) {
     return {
       type: "redirect",
-      location: withRedirectParam(
-        ADMIN_LOGIN_PATH,
-        `${pathname}${search}`,
-        "admin",
-      ),
+      location: withRedirectParam(ADMIN_LOGIN_PATH, `${pathname}${search}`, "admin"),
     };
   }
 

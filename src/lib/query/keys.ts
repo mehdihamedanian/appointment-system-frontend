@@ -208,6 +208,7 @@ export const queryKeys = {
         filters.analyticsTo ?? "",
         filters.branchId ?? "",
       ] as const,
+    businessTimezone: (userId: string) => ["admin", "business-timezone", userId] as const,
     appointmentList: (
       userId: string,
       filters: {
@@ -259,6 +260,8 @@ export const queryKeys = {
       ["admin", "manual-booking", userId, "customer-search", query] as const,
     manualBookingOptions: (userId: string) =>
       ["admin", "manual-booking", userId, "options"] as const,
+    manualBookingBranches: (userId: string, serviceId: string) =>
+      ["admin", "manual-booking", userId, "branches", serviceId] as const,
     manualBookingDates: (
       customerId: string,
       serviceId: string,
@@ -362,6 +365,7 @@ export const queryKeys = {
       ] as const,
     resourceDetail: (userId: string, reference: string) =>
       ["admin", "resources", userId, "detail", reference] as const,
+    resourceTypes: (userId: string) => ["admin", "resources", userId, "types"] as const,
     staffList: (
       userId: string,
       filters: {

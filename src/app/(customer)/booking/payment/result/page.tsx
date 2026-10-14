@@ -11,7 +11,7 @@ export default function BookingPaymentResultPage() {
   return (
     <Suspense
       fallback={
-        <div aria-busy="true" aria-label="در حال بررسی پرداخت">
+        <div role="status" aria-busy="true" aria-label="در حال بررسی پرداخت">
           <Skeleton variant="card" />
         </div>
       }

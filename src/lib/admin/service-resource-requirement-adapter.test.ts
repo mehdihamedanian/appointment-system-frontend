@@ -111,6 +111,42 @@ describe("service resource requirement adapter", () => {
     expect(JSON.stringify(payload)).not.toContain("customerVisible");
   });
 
+  it("maps several selected resources to Backend alternatives and keeps backend-only fields", () => {
+    const payload = sanitizeRequirementsPayload({
+      requirements: [
+        {
+          key: "req_1",
+          reference: "req_1",
+          resourceType: "room",
+          resourceTypeId: "rt_room",
+          assignmentMode: "manual",
+          label: "اتاق درمان",
+          quantity: 2,
+          necessity: "optional",
+          selectionMode: "specific",
+          selectedResourceIds: ["res_1", "res_2"],
+          branchScope: "global",
+          staffRole: "ignored",
+          sortOrder: 3,
+        },
+      ],
+    });
+    expect(payload).toEqual({
+      requirements: [
+        {
+          resource_type_id: "rt_room",
+          specific_resource_id: null,
+          alternative_resource_ids: ["res_1", "res_2"],
+          quantity: 2,
+          is_required: false,
+          assignment_mode: "manual",
+          label: "اتاق درمان",
+          sort_order: 3,
+        },
+      ],
+    });
+  });
+
   it("marks internal staff requirement when not provider selectable", () => {
     const internal: AdminServiceResourceRequirementItem = {
       key: "s",

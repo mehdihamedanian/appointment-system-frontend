@@ -116,9 +116,31 @@ export function serializeSettingsBaseline(form: unknown): string {
 
 /* ─── General ─────────────────────────────────────────────── */
 
+function flattenBusiness(root: Record<string, unknown>): Record<string, unknown> {
+  const business = isRecord(root.business) ? root.business : root;
+  const contact = isRecord(business.contact) ? business.contact : {};
+  const address = isRecord(business.address) ? business.address : {};
+  return {
+    ...root,
+    ...business,
+    businessName: business.businessName ?? business.business_name ?? root.businessName,
+    timezone: business.timezone ?? root.timezone,
+    currency: business.currency_code ?? business.currency ?? root.currency,
+    logoUrl: business.logoUrl ?? business.logo_url ?? root.logoUrl,
+    contactPhone:
+      contact.primary_phone ?? contact.primaryPhone ?? business.contactPhone ?? root.contactPhone,
+    contactEmail: contact.email ?? business.contactEmail ?? root.contactEmail,
+    address:
+      address.address_line1 ??
+      address.addressLine1 ??
+      business.address ??
+      root.address,
+  };
+}
+
 export function adaptAdminGeneralSettings(payload: unknown): AdminGeneralSettingsView {
   const root = unwrapPayload(payload);
-  const source = isRecord(root) ? root : {};
+  const source = flattenBusiness(isRecord(root) ? root : {});
   const meta = adaptSectionMeta(source);
   return {
     section: "general",
@@ -208,7 +230,7 @@ export function adaptAdminLocalizationSettings(
   payload: unknown,
 ): AdminLocalizationSettingsView {
   const root = unwrapPayload(payload);
-  const source = isRecord(root) ? root : {};
+  const source = flattenBusiness(isRecord(root) ? root : {});
   const meta = adaptSectionMeta(source);
   return {
     section: "localization",
@@ -298,19 +320,26 @@ export function localizationChangeIsHighImpact(
 
 export function adaptAdminBookingSettings(payload: unknown): AdminBookingSettingsView {
   const root = unwrapPayload(payload);
-  const source = isRecord(root) ? root : {};
+  const nested = isRecord(root) && isRecord(root.booking) ? { ...root, ...root.booking } : root;
+  const source = isRecord(nested) ? nested : {};
   const meta = adaptSectionMeta(source);
   const unitsSource = isRecord(source.fieldUnits) ? source.fieldUnits : {};
   return {
     section: "booking",
     ...meta,
     minAdvanceBookingMinutes: readNumber(
-      source.minAdvanceBookingMinutes ?? source.minAdvanceMinutes,
+      source.minAdvanceBookingMinutes ??
+        source.min_advance_booking_minutes ??
+        source.minAdvanceMinutes,
     ),
     maxAdvanceBookingDays: readNumber(
-      source.maxAdvanceBookingDays ?? source.maxAdvanceDays,
+      source.maxAdvanceBookingDays ??
+        source.max_advance_booking_days ??
+        source.maxAdvanceDays,
     ),
-    slotIntervalMinutes: readNumber(source.slotIntervalMinutes ?? source.slotInterval),
+    slotIntervalMinutes: readNumber(
+      source.slotIntervalMinutes ?? source.slot_interval_minutes ?? source.slotInterval,
+    ),
     slotHoldDurationMinutes: readNumber(
       source.slotHoldDurationMinutes ?? source.holdDurationMinutes,
     ),
@@ -440,7 +469,8 @@ const GATEWAY_STATUS_LABELS: Record<AdminPaymentGatewayStatus, string> = {
 
 export function adaptAdminPaymentSettings(payload: unknown): AdminPaymentSettingsView {
   const root = unwrapPayload(payload);
-  const source = isRecord(root) ? root : {};
+  const nested = isRecord(root) && isRecord(root.payment) ? { ...root, ...root.payment } : root;
+  const source = isRecord(nested) ? nested : {};
   const meta = adaptSectionMeta(source);
   const gatewayStatus = adaptGatewayStatus(source.gatewayStatus ?? source.connectionStatus);
   const methodIds = asList(source.enabledMethodIds ?? source.enabledMethods, [
@@ -547,7 +577,16 @@ export function adaptAdminNotificationSettings(
   payload: unknown,
 ): AdminNotificationSettingsView {
   const root = unwrapPayload(payload);
-  const source = isRecord(root) ? root : {};
+  const channels = isRecord(root) && isRecord(root.notifications) ? root.notifications : {};
+  const sms = isRecord(channels) && isRecord(channels.sms) ? channels.sms : {};
+  const email = isRecord(channels) && isRecord(channels.email) ? channels.email : {};
+  const source: Record<string, unknown> = isRecord(root)
+    ? {
+        ...root,
+        smsEnabled: sms.enabled ?? root.smsEnabled,
+        emailEnabled: email.enabled ?? root.emailEnabled,
+      }
+    : {};
   const meta = adaptSectionMeta(source);
   return {
     section: "notifications",

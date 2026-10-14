@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/activity-log-adapter";
 import { filtersToAdminActivityLogParams } from "@/lib/admin/activity-log-filters";
 import { queryKeys } from "@/lib/query/keys";
+import { EXPORT_JOB_POLL, boundedPollInterval } from "@/lib/query/policies";
 import type {
   AdminActivityLogDetailView,
   AdminActivityLogExportJobView,
@@ -112,10 +113,10 @@ export function adminActivityLogExportQueryOptions(userId: string, jobId: string
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       fetchAdminActivityLogExport(jobId, signal),
     enabled: Boolean(userId) && Boolean(jobId),
-    refetchInterval: (query: { state: { data?: AdminActivityLogExportJobView } }) => {
-      const status = query.state.data?.status;
-      return status === "preparing" ? 2000 : false;
-    },
+    refetchInterval: boundedPollInterval<AdminActivityLogExportJobView>(
+      (data) => data.status === "preparing",
+      EXPORT_JOB_POLL,
+    ),
     retry: false,
   };
 }

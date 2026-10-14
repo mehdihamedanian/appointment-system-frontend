@@ -60,6 +60,7 @@ function NotificationListBody({
 }) {
   const [extraItems, setExtraItems] = useState<CustomerNotificationView[]>([]);
   const [extraCursor, setExtraCursor] = useState<string | undefined>(data.nextCursor);
+  const [nextPage, setNextPage] = useState(page + 1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(data.hasMore && !data.pageCount);
   const loadLock = useRef(false);
@@ -75,15 +76,12 @@ function NotificationListBody({
     loadLock.current = true;
     setLoadingMore(true);
     try {
-      const next = await fetchCustomerNotifications({
-        read,
-        page: page + 1,
-        cursor: extraCursor,
-      });
+      const next = await fetchCustomerNotifications({ read, page: nextPage });
       setExtraItems((current) => {
         const seen = new Set([...data.items, ...current].map((item) => item.id));
         return [...current, ...next.items.filter((item) => !seen.has(item.id))];
       });
+      setNextPage((current) => current + 1);
       setExtraCursor(next.nextCursor);
       setHasMore(Boolean(next.hasMore || next.nextCursor) && !next.pageCount);
     } finally {
@@ -99,6 +97,7 @@ function NotificationListBody({
           <li key={item.id}>
             <NotificationListItem
               item={item}
+              headingLevel="h2"
               marking={markingId === item.id}
               onMarkRead={onMarkRead}
             />

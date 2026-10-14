@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/errors";
-import { confirmBooking, quoteRequestBody } from "@/lib/api/booking";
+import {
+  confirmBooking,
+  fetchBookingQuote,
+  previewBookingCheckout,
+  quoteRequestBody,
+} from "@/lib/api/booking";
 import { emptyBookingDraft } from "@/types/booking";
 
 vi.mock("@/lib/api/client", () => ({
@@ -56,5 +61,78 @@ describe("booking quote request", () => {
     mockedClient.mockRejectedValue(new ApiError({ status: 404, message: "نیست" }));
     const result = await confirmBooking(emptyBookingDraft(), "key-1");
     expect(result.outcome).toBe("missing_endpoint");
+  });
+});
+
+describe("booking quote against the current Backend (no quote endpoint)", () => {
+  beforeEach(() => {
+    mockedClient.mockReset();
+  });
+
+  function draft() {
+    const value = emptyBookingDraft();
+    value.serviceId = "svc_1";
+    value.slotId = "slot_1";
+    value.holdId = "hold_1";
+    return value;
+  }
+
+  it("without a coupon, defers pricing to booking creation and invents no amount", async () => {
+    const quote = await fetchBookingQuote(draft());
+    expect(mockedClient).not.toHaveBeenCalled();
+    expect(quote.authoritative).toBe(false);
+    expect(quote.pricedAtBooking).toBe(true);
+    expect(quote.checkoutPath).toBe("confirm");
+    expect(quote.paymentMode).toBe("unknown");
+    expect(quote.paymentOptions).toEqual([]);
+    expect(quote.lines).toEqual([]);
+    expect(quote.payableNowLabel).toBeUndefined();
+    expect(quote.finalAmountLabel).toBeUndefined();
+    await expect(previewBookingCheckout(draft())).resolves.toMatchObject({ checkoutPath: "confirm" });
+  });
+
+  it("validates a coupon through the advisory coupon endpoint only", async () => {
+    mockedClient.mockResolvedValue({ success: true, data: { valid: true } });
+    await fetchBookingQuote(draft(), undefined, "  OFF10 ");
+    expect(mockedClient).toHaveBeenCalledTimes(1);
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/coupons/validate",
+      expect.objectContaining({
+        method: "POST",
+        body: { couponCode: "OFF10", serviceId: "svc_1", holdToken: "hold_1" },
+      }),
+    );
+  });
+
+  it("shows the Backend's coupon amounts as given and keeps its rejection message", async () => {
+    mockedClient.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true,
+        code: "OFF10",
+        original_amount: "150000.00",
+        discount_amount: "15000.00",
+        final_amount: "135000.00",
+        currency_code: "IRR",
+      },
+    });
+    const applied = await fetchBookingQuote(draft(), undefined, "OFF10");
+    expect(applied.coupon).toMatchObject({ code: "OFF10", status: "applied" });
+    expect(applied.priceLabel).toMatch(/۱۵۰٬۰۰۰/);
+    expect(applied.discountLabel).toMatch(/۱۵٬۰۰۰/);
+    expect(applied.finalAmountLabel).toMatch(/۱۳۵٬۰۰۰/);
+
+    mockedClient.mockResolvedValue({
+      success: true,
+      data: { valid: false, code: null, failure_code: "COUPON_EXPIRED", message: "کد منقضی شده است." },
+    });
+    const rejected = await fetchBookingQuote(draft(), undefined, "OLD");
+    expect(rejected.coupon).toEqual({ code: "OLD", status: "invalid", message: "کد منقضی شده است." });
+    expect(rejected.discountLabel).toBeUndefined();
+  });
+
+  it("surfaces coupon validation failures other than a missing route", async () => {
+    mockedClient.mockRejectedValue(new ApiError({ status: 422, code: "COUPON_EXPIRED", message: "x" }));
+    await expect(fetchBookingQuote(draft(), undefined, "OLD")).rejects.toMatchObject({ status: 422 });
   });
 });

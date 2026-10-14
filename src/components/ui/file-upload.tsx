@@ -98,15 +98,24 @@ export function FileUpload({
           if (event.dataTransfer.files) addFiles(event.dataTransfer.files);
         }}
       >
-        <p>{label}</p>
-        <p className="ds-help">کشیدن و رها کردن یا انتخاب از دستگاه. اعتبارسنجی فقط برای تجربه کاربری است.</p>
-        <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()}>
+        <p id={`${inputId}-label`}>{label}</p>
+        <p id={`${inputId}-help`} className="ds-help">
+          کشیدن و رها کردن یا انتخاب از دستگاه. اعتبارسنجی فقط برای تجربه کاربری است.
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          aria-describedby={`${inputId}-label ${inputId}-help`}
+          onClick={() => inputRef.current?.click()}
+        >
           انتخاب پرونده
         </Button>
         <input
           ref={inputRef}
           id={inputId}
           className="visually-hidden"
+          tabIndex={-1}
+          aria-label={label}
           type="file"
           accept={accept}
           multiple={multiple}
@@ -116,9 +125,9 @@ export function FileUpload({
           }}
         />
       </div>
-      <div className="visually-hidden" role="status">
+      <p className={message ? "ds-error" : "visually-hidden"} role="status">
         {message}
-      </div>
+      </p>
       <ul className="ds-upload__list">
         {files.map((item) => (
           <li key={item.id} className="ds-inline">

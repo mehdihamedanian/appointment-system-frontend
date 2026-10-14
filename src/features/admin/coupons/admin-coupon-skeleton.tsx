@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/feedback/loading-states";
 
 export function AdminCouponListSkeleton() {
   return (
-    <div className="admin-coupon-skeleton" aria-busy="true" aria-label="در حال بارگذاری کوپن‌ها">
+    <div className="admin-coupon-skeleton" role="status" aria-busy="true" aria-label="در حال بارگذاری کوپن‌ها">
       <Skeleton variant="line" />
       <Skeleton variant="card" />
       <Skeleton variant="card" />
@@ -12,7 +12,7 @@ export function AdminCouponListSkeleton() {
 
 export function AdminCouponDetailSkeleton() {
   return (
-    <div className="admin-coupon-skeleton" aria-busy="true" aria-label="در حال بارگذاری جزئیات کوپن">
+    <div className="admin-coupon-skeleton" role="status" aria-busy="true" aria-label="در حال بارگذاری جزئیات کوپن">
       <Skeleton variant="line" />
       <Skeleton variant="card" />
       <Skeleton variant="card" />
@@ -22,7 +22,7 @@ export function AdminCouponDetailSkeleton() {
 
 export function AdminCouponFormSkeleton() {
   return (
-    <div className="admin-coupon-skeleton" aria-busy="true" aria-label="در حال بارگذاری فرم کوپن">
+    <div className="admin-coupon-skeleton" role="status" aria-busy="true" aria-label="در حال بارگذاری فرم کوپن">
       <Skeleton variant="card" />
       <Skeleton variant="card" />
     </div>

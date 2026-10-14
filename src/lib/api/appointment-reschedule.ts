@@ -1,12 +1,17 @@
 import { apiClient } from "@/lib/api/client";
 import { ApiError, isNotFoundError, toAppApiError } from "@/lib/api/errors";
-import { adaptBookableDates, adaptBookableSlots } from "@/lib/booking/adapters";
+import {
+  adaptServiceAvailabilityDates,
+  adaptServiceAvailabilitySlots,
+} from "@/lib/booking/adapters";
 import { canQueryAvailability } from "@/lib/availability/context";
 import { preferenceKey } from "@/lib/availability/context";
+import { calendarMonthBounds, isCalendarMonthKey } from "@/lib/date-time/calendar-adapter";
+import { startTimeFromSlotId } from "@/lib/api/backend-contract";
 import {
   adaptReschedulePreview,
-  adaptRescheduleQuote,
   adaptRescheduleResult,
+  buildRescheduleReview,
 } from "@/lib/customer/appointment-reschedule-adapter";
 import { bookingProviderId } from "@/lib/public/provider-preference";
 import { isSafePublicId } from "@/lib/public/booking-href";
@@ -59,24 +64,36 @@ export async function fetchRescheduleDates(
     month: string;
     branchId?: string;
     preference: ProviderPreference;
+    serviceId?: string;
   },
   signal?: AbortSignal,
 ): Promise<BookableDatesView> {
+  if (!input.branchId) {
+    return emptyDates("branch_required");
+  }
+  const serviceId = input.serviceId;
+  if (!serviceId || !isSafePublicId(serviceId)) {
+    return emptyDates("missing_endpoint");
+  }
+  const bounds = calendarMonthBounds(input.month);
+  if (!bounds) {
+    return emptyDates("error");
+  }
   try {
     const payload = await apiClient<unknown>(
-      `/customer/appointments/${encodeURIComponent(reference)}/reschedule/availability/dates`,
+      `/services/${encodeURIComponent(serviceId)}/availability`,
       {
         method: "GET",
         signal,
         query: {
-          month: input.month,
-          branchId: input.branchId,
-          providerId: bookingProviderId(input.preference),
-          preference: input.preference.type,
+          branch_id: input.branchId,
+          from: bounds.from,
+          to: bounds.to,
+          staff_id: bookingProviderId(input.preference),
         },
       },
     );
-    return adaptBookableDates(payload);
+    return adaptServiceAvailabilityDates(payload);
   } catch (error) {
     const normalized = toAppApiError(error);
     if (isNotFoundError(normalized)) {
@@ -92,24 +109,31 @@ export async function fetchRescheduleSlots(
     date: string;
     branchId?: string;
     preference: ProviderPreference;
+    serviceId?: string;
   },
   signal?: AbortSignal,
 ): Promise<BookableSlotsView> {
+  if (!input.branchId) {
+    return emptySlots("branch_required");
+  }
+  const serviceId = input.serviceId;
+  if (!serviceId || !isSafePublicId(serviceId)) {
+    return emptySlots("missing_endpoint");
+  }
   try {
     const payload = await apiClient<unknown>(
-      `/customer/appointments/${encodeURIComponent(reference)}/reschedule/availability/slots`,
+      `/services/${encodeURIComponent(serviceId)}/availability`,
       {
         method: "GET",
         signal,
         query: {
+          branch_id: input.branchId,
           date: input.date,
-          branchId: input.branchId,
-          providerId: bookingProviderId(input.preference),
-          preference: input.preference.type,
+          staff_id: bookingProviderId(input.preference),
         },
       },
     );
-    return adaptBookableSlots(payload);
+    return adaptServiceAvailabilitySlots(payload, input.date);
   } catch (error) {
     const normalized = toAppApiError(error);
     if (isNotFoundError(normalized)) {
@@ -130,29 +154,23 @@ export async function fetchRescheduleQuote(
   },
   signal?: AbortSignal,
 ): Promise<RescheduleQuoteView> {
-  const payload = await apiClient<unknown>(
-    `/customer/appointments/${encodeURIComponent(reference)}/reschedule/quote`,
-    {
-      method: "POST",
-      signal,
-      body: {
-        slotId: input.slotId,
-        date: input.date,
-        branchId: input.branchId,
-        providerId: input.providerId,
-        previewVersion: input.previewVersion,
-      },
-    },
-  );
-  const quote = adaptRescheduleQuote(payload);
-  if (!quote) {
+  const startsAt = startTimeFromSlotId(input.slotId);
+  if (!startsAt) {
     throw new ApiError({
       status: 422,
       code: "RESCHEDULE_QUOTE_INVALID",
       message: "پیش‌نمایش زمان‌بندی مجدد معتبر نیست.",
     });
   }
-  return quote;
+  const preview = await fetchReschedulePreview(reference, signal);
+  if (!preview.canReschedule) {
+    throw new ApiError({
+      status: 409,
+      code: "RESCHEDULE_NOT_ALLOWED",
+      message: preview.blockedReason ?? "این نوبت دیگر قابل زمان‌بندی مجدد نیست.",
+    });
+  }
+  return buildRescheduleReview(preview, { slotId: input.slotId, date: input.date, startsAt });
 }
 
 export async function submitAppointmentReschedule(
@@ -227,8 +245,8 @@ export function rescheduleDatesQueryOptions(
   return {
     queryKey: queryKeys.reschedule.dates(reference, branchId, preference, month),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      fetchRescheduleDates(reference, { month, branchId, preference }, signal),
-    enabled: enabled && Boolean(month),
+      fetchRescheduleDates(reference, { month, branchId, preference, serviceId }, signal),
+    enabled: enabled && isCalendarMonthKey(month),
     staleTime: AVAILABILITY_STALE_MS,
     gcTime: 60_000,
     refetchOnMount: true,
@@ -255,7 +273,7 @@ export function rescheduleSlotsQueryOptions(
   return {
     queryKey: queryKeys.reschedule.slots(reference, branchId, preference, date),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      fetchRescheduleSlots(reference, { date, branchId, preference }, signal),
+      fetchRescheduleSlots(reference, { date, branchId, preference, serviceId }, signal),
     enabled: enabled && Boolean(date),
     staleTime: AVAILABILITY_STALE_MS,
     gcTime: 60_000,

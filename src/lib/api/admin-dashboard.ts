@@ -1,20 +1,37 @@
 import { apiClient } from "@/lib/api/client";
-import { adaptAdminDashboard } from "@/lib/admin/dashboard-adapter";
+import { toAppApiError } from "@/lib/api/errors";
 import {
+  adaptDashboardSummary,
+  RECENT_APPOINTMENTS_LIMIT,
+  type DashboardSectionResult,
+} from "@/lib/admin/dashboard-adapter";
+import {
+  analyticsRangeQueryParams,
   defaultOperationalDate,
-  filtersToQueryParams,
+  operationalDayQueryParams,
 } from "@/lib/admin/dashboard-filters";
+import { unwrapPayload } from "@/lib/public/read";
+import { isRecord, readString } from "@/lib/utilities/records";
 import { queryKeys } from "@/lib/query/keys";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AdminDashboardFilters, AdminDashboardView } from "@/types/admin-dashboard";
 
-function buildSearchParams(filters: AdminDashboardFilters): string {
-  const params = new URLSearchParams();
-  const mapped = filtersToQueryParams(filters);
-  for (const [key, value] of Object.entries(mapped)) {
-    params.set(key, value);
+const SUMMARY_PATH = "/admin/dashboard/summary";
+
+async function settle(task: () => Promise<unknown>): Promise<DashboardSectionResult> {
+  try {
+    return { ok: true, payload: await task() };
+  } catch (error) {
+    return { ok: false, error: toAppApiError(error) };
   }
-  return params.toString();
+}
+
+function readPeriodBounds(payload: unknown): { start: string; end: string } | undefined {
+  const root = unwrapPayload(payload);
+  const period = isRecord(root) && isRecord(root.period) ? root.period : undefined;
+  const start = readString(period?.start);
+  const end = readString(period?.end);
+  return start && end ? { start, end } : undefined;
 }
 
 export async function fetchAdminDashboard(
@@ -22,17 +39,52 @@ export async function fetchAdminDashboard(
   signal?: AbortSignal,
   fallbackTimezone?: string,
 ): Promise<AdminDashboardView> {
-  const query = buildSearchParams(filters);
-  const path = query ? `/admin/dashboard?${query}` : "/admin/dashboard";
-  const payload = await apiClient<unknown>(path, {
+  const analyticsPromise = settle(() =>
+    apiClient<unknown>(SUMMARY_PATH, {
+      method: "GET",
+      signal,
+      query: analyticsRangeQueryParams(filters),
+    }),
+  );
+
+  const day = await apiClient<unknown>(SUMMARY_PATH, {
     method: "GET",
     signal,
+    query: operationalDayQueryParams(filters),
   });
-  const fallbackDate = defaultOperationalDate(
-    fallbackTimezone,
-    filters.date ? new Date(`${filters.date}T12:00:00`) : new Date(),
-  );
-  return adaptAdminDashboard(payload, fallbackDate);
+
+  // The summary resolves the local day in the business timezone; reuse those bounds.
+  const bounds = readPeriodBounds(day);
+  const recentPromise: Promise<DashboardSectionResult> = bounds
+    ? settle(() =>
+        apiClient<unknown>("/admin/appointments", {
+          method: "GET",
+          signal,
+          query: {
+            starts_from: bounds.start,
+            starts_to: bounds.end,
+            branch_id: filters.branchId,
+            page: 1,
+            page_size: RECENT_APPOINTMENTS_LIMIT,
+          },
+        }),
+      )
+    : Promise.resolve({
+        ok: false,
+        error: { status: 0, message: "بازه زمانی روز عملیاتی از Backend دریافت نشد." },
+      });
+
+  const [analytics, recent] = await Promise.all([analyticsPromise, recentPromise]);
+  const fallbackDate = filters.date || defaultOperationalDate(fallbackTimezone);
+  return adaptDashboardSummary({ day, analytics, recent }, fallbackDate);
+}
+
+/** Business timezone from `GET /admin/settings`, which the Backend restricts to settings readers. */
+export async function fetchBusinessTimezone(signal?: AbortSignal): Promise<string | undefined> {
+  const payload = await apiClient<unknown>("/admin/settings", { method: "GET", signal });
+  const root = unwrapPayload(payload);
+  const business = isRecord(root) && isRecord(root.business) ? root.business : undefined;
+  return readString(business?.timezone);
 }
 
 export function invalidateAdminDashboard(

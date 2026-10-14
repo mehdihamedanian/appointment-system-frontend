@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminServiceResourceRequirementsScreen } from "@/features/admin/service-resources/admin-service-resource-requirements-screen";
 import { ServiceResourceRequirementsEditor } from "@/features/admin/service-resources/service-resource-requirements-editor";
@@ -169,60 +169,124 @@ describe("AdminServiceResourceRequirementsScreen", () => {
   });
 });
 
-describe("AdminServiceResourceRequirementsScreen save", () => {
-  beforeEach(() => {
-    mockedClient.mockReset();
-  });
+describe("service resource requirements (Backend contract)", () => {
+  const PATH = "/admin/services/svc_1/resource-requirements";
+  const resourceTypes = [
+    { id: "rt_staff", code: "staff", display_name: "Staff" },
+    { id: "rt_room", code: "room", display_name: "Room" },
+  ];
+  const roomItem = {
+    id: "res_room1",
+    name: "اتاق ۱",
+    resource_type_code: "room",
+    resource_type_display_name: "Room",
+    is_active: true,
+    capacity: 1,
+    branch_count: 1,
+  };
 
-  it("requests impact preview before save", async () => {
-    const user = userEvent.setup();
-    mockServiceResourcesApi();
-    renderWithProviders(<AdminServiceResourceRequirementsScreen />);
-    await screen.findByText("نیازمندی 3");
-    await user.click(screen.getByRole("button", { name: "ذخیره نیازمندی‌ها" }));
-    expect(await screen.findByText(/اثر روی دسترس‌پذیری/)).toBeInTheDocument();
-  });
-});
+  function requirementRead(overrides: Record<string, unknown>) {
+    return {
+      id: "req_1",
+      service_id: "svc_1",
+      resource_type_id: "rt_room",
+      resource_type_code: "room",
+      resource_type_display_name: "Room",
+      specific_resource_id: null,
+      quantity: 1,
+      is_required: true,
+      assignment_mode: "automatic",
+      label: null,
+      sort_order: 1,
+      alternatives: [],
+      ...overrides,
+    };
+  }
 
-describe("Phase 30 service resources E2E flow", () => {
-  beforeEach(() => {
-    mockedClient.mockReset();
-  });
-
-  it("adds requirement row and saves after impact confirmation", async () => {
-    const user = userEvent.setup();
-    mockServiceResourcesApi({
-      requirements: [],
-    });
+  function mockBackend(requirements: unknown[]) {
     mockedClient.mockImplementation(async (path: string, init?: { method?: string }) => {
-      const url = String(path);
-      if (url.includes("/impact-preview")) {
-        return { title: "تأیید", summary: "ذخیره امن", requiresConfirmation: true };
-      }
-      if (url.includes("/eligible-resources")) {
-        return { items: [{ id: "dev_1", name: "MRI A", type: "device", active: true }] };
-      }
-      if (url.includes("/resource-requirements") && init?.method === "PUT") {
-        return { serviceReference: "svc_mri", version: "v2" };
-      }
-      if (url.includes("/resource-requirements")) {
-        return mappingPayload([]);
-      }
-      return {};
+      if (path === PATH && init?.method === "PUT") return { service_id: "svc_1", requirements };
+      if (path === PATH) return { service_id: "svc_1", requirements };
+      if (path === "/admin/resources/types") return resourceTypes;
+      if (path === "/resources") return { items: [roomItem], meta: { total: 1 } };
+      throw new Error(`unexpected ${init?.method ?? "GET"} ${path}`);
     });
+  }
+
+  function putBody() {
+    const call = mockedClient.mock.calls.find((item) => item[0] === PATH && item[1]?.method === "PUT");
+    return call?.[1]?.body;
+  }
+
+  beforeEach(() => {
+    mockedClient.mockReset();
+    params = { serviceReference: "svc_1" };
+  });
+
+  it("reads alternatives as any-one-of the listed resources", async () => {
+    mockBackend([
+      requirementRead({
+        alternatives: [
+          { id: "alt_1", resource_id: "res_room1", resource_name: "اتاق ۱", resource_type_code: "room", is_active: true },
+          { id: "alt_2", resource_id: "res_room2", resource_name: "اتاق ۲", resource_type_code: "room", is_active: true },
+        ],
+      }),
+    ]);
     renderWithProviders(<AdminServiceResourceRequirementsScreen />);
-    await screen.findByText(/منابع — MRI مغز/);
-    await user.click(screen.getByRole("button", { name: "افزودن نیازمندی" }));
-    expect(await screen.findByText("نیازمندی 1")).toBeInTheDocument();
+    expect((await screen.findAllByText(/اتاق ۱ یا اتاق ۲/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/نقش\/سمت/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/قابل انتخاب توسط مشتری/)).not.toBeInTheDocument();
+  });
+
+  it("pins one resource of a Backend type and saves the strict replace body after confirmation", async () => {
+    const user = userEvent.setup();
+    mockBackend([]);
+    renderWithProviders(<AdminServiceResourceRequirementsScreen />);
+    await user.click(await screen.findByRole("button", { name: "افزودن نیازمندی" }));
+
+    await user.click(screen.getByRole("button", { name: "نوع منبع" }));
+    await user.click(await screen.findByRole("option", { name: "اتاق" }));
+    await user.click(screen.getByRole("button", { name: "حالت انتخاب" }));
+    await user.click(await screen.findByRole("option", { name: "منابع مشخص" }));
+    await user.click(await screen.findByRole("button", { name: "منابع مشخص" }));
+    await user.click(await screen.findByRole("option", { name: "اتاق ۱" }));
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/resources",
+      expect.objectContaining({ query: { resource_type_id: "rt_room", is_active: "true", page_size: 100 } }),
+    );
+
     await user.click(screen.getByRole("button", { name: "ذخیره نیازمندی‌ها" }));
-    expect(await screen.findByText(/ذخیره امن/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "تأیید و ذخیره" }));
-    await waitFor(() => {
-      expect(
-        mockedClient.mock.calls.some(
-          (call) => String(call[0]).includes("/resource-requirements") && call[1]?.method === "PUT",
-        ),
-      ).toBe(true);
-    });
+    const dialog = await screen.findByRole("dialog");
+    expect(putBody()).toBeUndefined();
+    await user.click(within(dialog).getByRole("button", { name: "تأیید و ذخیره" }));
+
+    await waitFor(() =>
+      expect(putBody()).toEqual({
+        requirements: [
+          {
+            resource_type_id: "rt_room",
+            specific_resource_id: "res_room1",
+            alternative_resource_ids: [],
+            quantity: 1,
+            is_required: true,
+            assignment_mode: "automatic",
+            label: null,
+            sort_order: 1,
+          },
+        ],
+      }),
+    );
+    expect(mockedClient.mock.calls.some((call) => String(call[0]).includes("impact-preview"))).toBe(false);
+  });
+
+  it("does not save a requirement without a Backend resource type", async () => {
+    const user = userEvent.setup();
+    mockBackend([]);
+    renderWithProviders(<AdminServiceResourceRequirementsScreen />);
+    await user.click(await screen.findByRole("button", { name: "افزودن نیازمندی" }));
+    await user.click(screen.getByRole("button", { name: "ذخیره نیازمندی‌ها" }));
+    expect(await screen.findByText("نوع منبع را انتخاب کنید.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(putBody()).toBeUndefined();
   });
 });

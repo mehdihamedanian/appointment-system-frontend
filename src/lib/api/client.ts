@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import { rewriteBackendRequest } from "@/lib/api/backend-contract";
 import {
   ApiError,
   isUnauthorizedError,
@@ -6,6 +7,7 @@ import {
   normalizeNetworkError,
 } from "@/lib/api/errors";
 import { notifyUnauthorized } from "@/lib/api/unauthorized";
+import { recordServerDateHeader } from "@/lib/date-time/server-clock";
 import type { ApiQueryValue, ApiRequestOptions } from "@/types/api";
 
 const DEFAULT_ACCEPT = "application/json";
@@ -83,7 +85,15 @@ function combineSignals(left: AbortSignal, right: AbortSignal): AbortSignal {
   return controller.signal;
 }
 
-async function getCookieHeader(): Promise<string | undefined> {
+// Browser requests go through the same-origin session layer
+// (src/app/api/backend), which holds the httpOnly session cookies.
+const BROWSER_API_BASE_PATH = "/api/backend";
+
+function resolveApiBaseUrl(): string {
+  return typeof window === "undefined" ? env.apiBaseUrl : BROWSER_API_BASE_PATH;
+}
+
+async function getServerAuthorization(): Promise<string | undefined> {
   if (typeof window !== "undefined") {
     return undefined;
   }
@@ -91,8 +101,8 @@ async function getCookieHeader(): Promise<string | undefined> {
   try {
     const { cookies } = await import("next/headers");
     const store = await cookies();
-    const serialized = store.toString();
-    return serialized.length > 0 ? serialized : undefined;
+    const accessToken = store.get(`${env.sessionCookieName || "session"}_access`)?.value;
+    return accessToken ? `Bearer ${accessToken}` : undefined;
   } catch {
     return undefined;
   }
@@ -123,7 +133,7 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 
 function buildHeaders(
   options: ApiRequestOptions,
-  cookieHeader?: string,
+  authorization?: string,
 ): Headers {
   const headers = new Headers(options.headers);
   headers.set("Accept", headers.get("Accept") ?? DEFAULT_ACCEPT);
@@ -135,8 +145,8 @@ function buildHeaders(
     headers.set("Content-Type", DEFAULT_CONTENT_TYPE);
   }
 
-  if (cookieHeader && !headers.has("Cookie")) {
-    headers.set("Cookie", cookieHeader);
+  if (authorization && !headers.has("Authorization")) {
+    headers.set("Authorization", authorization);
   }
 
   return headers;
@@ -146,7 +156,8 @@ export async function apiClient<T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> {
-  if (!env.apiBaseUrl) {
+  const baseUrl = resolveApiBaseUrl();
+  if (!baseUrl) {
     throw new ApiError({
       status: 0,
       code: "MISSING_API_BASE_URL",
@@ -155,20 +166,28 @@ export async function apiClient<T>(
   }
 
   const method = options.method ?? (options.body !== undefined ? "POST" : "GET");
-  const url = appendQuery(joinUrl(env.apiBaseUrl, path), options.query);
-  const cookieHeader = await getCookieHeader();
-  const headers = buildHeaders({ ...options, method }, cookieHeader);
+  const rewritten = rewriteBackendRequest({
+    path,
+    query: options.query,
+    method,
+    body: options.body,
+  });
+  const url = appendQuery(joinUrl(baseUrl, rewritten.path), rewritten.query);
+  const authorization = await getServerAuthorization();
+  const headers = buildHeaders({ ...options, method }, authorization);
   const timeoutMs = options.timeoutMs ?? env.requestTimeoutMs;
   const signal = mergeSignals(timeoutMs, options.signal);
 
+  const outgoingBody = rewritten.body;
   const requestBody =
-    options.body === undefined || method === "GET"
+    outgoingBody === undefined || method === "GET"
       ? undefined
-      : typeof FormData !== "undefined" && options.body instanceof FormData
-        ? options.body
-        : JSON.stringify(options.body);
+      : typeof FormData !== "undefined" && outgoingBody instanceof FormData
+        ? outgoingBody
+        : JSON.stringify(outgoingBody);
 
   let response: Response;
+  const sentAt = Date.now();
   try {
     response = await fetch(url, {
       method,
@@ -181,6 +200,9 @@ export async function apiClient<T>(
   } catch (error) {
     throw new ApiError(normalizeNetworkError(error));
   }
+  if (typeof window !== "undefined") {
+    recordServerDateHeader(response.headers?.get("date"), sentAt, Date.now());
+  }
 
   const body = await parseResponseBody(response);
 
@@ -188,7 +210,7 @@ export async function apiClient<T>(
     const error = new ApiError(
       normalizeHttpError(response.status, body, response.headers),
     );
-    if (isUnauthorizedError(error)) {
+    if (isUnauthorizedError(error) && options.notifyUnauthorized !== false) {
       notifyUnauthorized(error);
     }
     throw error;

@@ -34,9 +34,9 @@ export function WaitingListEntryCard({ entry }: { entry: WaitingListEntryView })
           <Badge tone="information">پیشنهاد فعال</Badge>
         ) : null}
       </div>
-      <h3 id={titleId} className="waiting-list-card__title">
+      <h2 id={titleId} className="waiting-list-card__title">
         {entry.service.name}
-      </h3>
+      </h2>
       <p className="text-caption">
         این یک درخواست لیست انتظار است و نوبت قطعی نیست.
       </p>

@@ -6,7 +6,7 @@ export function AdminActivityLogListSkeleton() {
   return (
     <div
       className="admin-activity-log-skeleton"
-      aria-busy="true"
+      role="status" aria-busy="true"
       aria-label="در حال بارگذاری گزارش فعالیت"
     >
       <Skeleton variant="card" />
@@ -20,7 +20,7 @@ export function AdminActivityLogDetailSkeleton() {
   return (
     <div
       className="admin-activity-log-detail-skeleton"
-      aria-busy="true"
+      role="status" aria-busy="true"
       aria-label="در حال بارگذاری جزئیات رویداد"
     >
       <Skeleton variant="card" />

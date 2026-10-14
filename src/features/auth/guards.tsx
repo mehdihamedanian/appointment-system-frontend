@@ -32,7 +32,12 @@ function guestAudience(pathname: string): RedirectAudience {
   return pathname === ADMIN_LOGIN_PATH ? "admin" : "customer";
 }
 
-export function GuestGuard({ children }: GuardProps) {
+/**
+ * `signedOut` is true when the request carried no session cookies. Such a
+ * visitor cannot be authenticated, so the page renders on the server instead of
+ * waiting for the client session check.
+ */
+export function GuestGuard({ children, signedOut = false }: GuardProps & { signedOut?: boolean }) {
   const { status, user } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -58,7 +63,7 @@ export function GuestGuard({ children }: GuardProps) {
     );
   }, [audience, router, searchParams, status, user]);
 
-  if (status === "loading" || status === "authenticated") {
+  if (status === "authenticated" || (status === "loading" && !signedOut)) {
     return <PageLoading label="در حال بررسی نشست" />;
   }
 

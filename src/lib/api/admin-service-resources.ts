@@ -3,19 +3,16 @@ import { ApiError, isNotFoundError, toAppApiError } from "@/lib/api/errors";
 import {
   adaptAdminServiceResourceRequirements,
   adaptEligibleResources,
-  adaptServiceResourceRequirementsImpactPreview,
   adaptServiceResourceRequirementsSaveResult,
   sanitizeRequirementsPayload,
 } from "@/lib/admin/service-resource-requirement-adapter";
 import { queryKeys } from "@/lib/query/keys";
 import type {
   AdminEligibleResourcesView,
-  AdminServiceResourceRequirementsImpactPreview,
   AdminServiceResourceRequirementsInput,
   AdminServiceResourceRequirementsSaveResult,
   AdminServiceResourceRequirementsView,
 } from "@/types/admin-service-resource-requirement";
-import type { AdminResourceType } from "@/types/admin-resource";
 
 export async function fetchAdminServiceResourceRequirements(
   serviceReference: string,
@@ -36,50 +33,28 @@ export async function fetchAdminServiceResourceRequirements(
   return view;
 }
 
+/** Upper bound of one resource-list page; enough for the resources of a single type. */
+const PINNABLE_RESOURCES_PAGE_SIZE = 100;
+
+/**
+ * Active resources of one type that may be pinned to a requirement. The Backend's own
+ * eligible-resources route needs a saved requirement id, so drafts read the typed list;
+ * the Backend still validates the type match on save.
+ */
 export async function fetchEligibleResourcesForRequirement(
-  serviceReference: string,
-  params: { type: AdminResourceType; branchId?: string },
+  resourceTypeId: string,
   signal?: AbortSignal,
 ): Promise<AdminEligibleResourcesView> {
-  const query = new URLSearchParams();
-  if (params.type !== "unknown") query.set("type", params.type);
-  if (params.branchId) query.set("branchId", params.branchId);
-  try {
-    const payload = await apiClient<unknown>(
-      `/admin/services/${encodeURIComponent(serviceReference)}/resource-requirements/eligible-resources?${query.toString()}`,
-      { method: "GET", signal },
-    );
-    return adaptEligibleResources(payload);
-  } catch (error) {
-    if (isNotFoundError(toAppApiError(error))) {
-      return { items: [], selectionSemantics: "unknown" };
-    }
-    throw error;
-  }
-}
-
-export async function fetchAdminServiceResourceRequirementsImpactPreview(
-  serviceReference: string,
-  input: AdminServiceResourceRequirementsInput,
-  signal?: AbortSignal,
-): Promise<AdminServiceResourceRequirementsImpactPreview> {
-  const payload = await apiClient<unknown>(
-    `/admin/services/${encodeURIComponent(serviceReference)}/resource-requirements/impact-preview`,
-    {
-      method: "POST",
-      signal,
-      body: sanitizeRequirementsPayload(input),
+  const payload = await apiClient<unknown>("/resources", {
+    method: "GET",
+    signal,
+    query: {
+      resource_type_id: resourceTypeId,
+      is_active: "true",
+      page_size: PINNABLE_RESOURCES_PAGE_SIZE,
     },
-  );
-  const preview = adaptServiceResourceRequirementsImpactPreview(payload);
-  if (!preview) {
-    throw new ApiError({
-      status: 422,
-      code: "ADMIN_SERVICE_RESOURCE_IMPACT_INVALID",
-      message: "پیش‌نمایش اثر تغییر معتبر نیست.",
-    });
-  }
-  return preview;
+  });
+  return adaptEligibleResources(payload);
 }
 
 export async function saveAdminServiceResourceRequirements(

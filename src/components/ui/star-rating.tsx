@@ -39,11 +39,6 @@ export function StarRating({
     <fieldset
       className={cx("star-rating", error && "is-invalid")}
       disabled={disabled}
-      aria-required={required || undefined}
-      aria-invalid={error ? true : undefined}
-      aria-describedby={
-        [description ? helpId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined
-      }
     >
       <legend className="ds-label">
         {legend}
@@ -58,6 +53,11 @@ export function StarRating({
         className="star-rating__options"
         role="radiogroup"
         aria-label={legend}
+        aria-required={required || undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={
+          [description ? helpId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined
+        }
         onMouseLeave={() => setPreview(null)}
       >
         {options.map((option) => {

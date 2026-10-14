@@ -67,8 +67,9 @@ export function readUrl(value: unknown): string | undefined {
   if (!raw) {
     return undefined;
   }
-  if (raw.startsWith("/") && !raw.startsWith("//")) {
-    return raw;
+  if (raw.startsWith("/")) {
+    // Browsers drop tabs/newlines and treat "\" as "/", so "/\host" or "/\t/host" resolve off-site.
+    return /^\/[/\\]|[\\\u0000-\u001f]/.test(raw) ? undefined : raw;
   }
   try {
     const url = new URL(raw);

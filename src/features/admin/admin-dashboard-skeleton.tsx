@@ -4,7 +4,7 @@ export function AdminDashboardSkeleton() {
   return (
     <div
       className="admin-dashboard"
-      aria-busy="true"
+      role="status" aria-busy="true"
       aria-live="polite"
       aria-label="در حال بارگذاری داشبورد مدیریت"
     >

@@ -48,6 +48,7 @@ export function ConfirmDialog({
       preventClose={busy}
       showClose={!busy}
       onClose={onCancel}
+      describedBy={consequence ? consequenceId : undefined}
       footer={
         <>
           <Button

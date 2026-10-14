@@ -15,6 +15,7 @@ import {
   resolveCalendarDayState,
 } from "@/lib/availability/days";
 import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { calendarMonthKeyFor, isIsoDateInMonthKey } from "@/lib/date-time/calendar-adapter";
 import { toAppApiError } from "@/lib/api/errors";
 import type { ProviderPreference, ProviderSelectionMode } from "@/types/provider";
 import type { CalendarDayVisualState } from "@/types/availability";
@@ -53,12 +54,15 @@ export function DateStep({
   };
 }) {
   const todayFallback = todayIsoInTimeZone(timezone);
-  const [month, setMonth] = useState(() => (selected ?? todayFallback).slice(0, 7));
+  const [month, setMonth] = useState(
+    () => calendarMonthKeyFor(selected ?? todayFallback) ?? calendarMonthKeyFor(todayFallback) ?? "",
+  );
   const [syncedSelected, setSyncedSelected] = useState(selected);
   if (selected !== syncedSelected) {
     setSyncedSelected(selected);
-    if (selected) {
-      setMonth(selected.slice(0, 7));
+    const selectedMonth = selected ? calendarMonthKeyFor(selected) : null;
+    if (selectedMonth) {
+      setMonth(selectedMonth);
     }
   }
 
@@ -85,7 +89,12 @@ export function DateStep({
     refreshLock.current = true;
     try {
       const result = await datesQuery.refetch();
-      if (selected && result.data && selected.startsWith(month) && !result.data.dates.includes(selected)) {
+      if (
+        selected &&
+        result.data &&
+        isIsoDateInMonthKey(selected, month) &&
+        !result.data.dates.includes(selected)
+      ) {
         onSelect(null);
       }
     } finally {
@@ -109,6 +118,24 @@ export function DateStep({
       <EmptyState
         title="تقویم نوبت هنوز متصل نشده"
         description="تاریخ‌های قابل رزرو باید از سرویس نوبت‌دهی دریافت شود. تاریخ‌ها در این صفحه ساخته نمی‌شوند."
+      />
+    );
+  }
+
+  if (dates?.unavailableReason === "branch_required") {
+    return (
+      <EmptyState
+        title="شعبه انتخاب نشده است"
+        description="سرویس نوبت‌دهی تاریخ‌های آزاد را فقط برای یک شعبهٔ مشخص اعلام می‌کند."
+      />
+    );
+  }
+
+  if (dates?.unavailableReason === "not_configured") {
+    return (
+      <EmptyState
+        title="برنامهٔ این خدمت کامل نیست"
+        description="تنظیمات زمان‌بندی این خدمت در سرویس نوبت‌دهی معتبر نیست؛ تاریخی برای رزرو اعلام نشده است."
       />
     );
   }

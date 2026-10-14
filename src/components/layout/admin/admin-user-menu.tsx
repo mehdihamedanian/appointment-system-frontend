@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, Settings } from "lucide-react";
 import { Avatar } from "@/components/ui/data-display";
@@ -53,9 +52,6 @@ export function AdminUserMenu() {
         <LogOut size={16} aria-hidden="true" />
         خروج
       </DropdownItem>
-      <div className="visually-hidden">
-        <Link href={routes.admin.settings}>تنظیمات</Link>
-      </div>
     </Dropdown>
   );
 }

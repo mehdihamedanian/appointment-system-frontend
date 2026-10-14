@@ -1,4 +1,5 @@
 import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { serverNow } from "@/lib/date-time/server-clock";
 import {
   parseAdminAppointmentStatus,
   parseAdminPaymentStatus,
@@ -39,7 +40,7 @@ function parsePresentation(value: string | null | undefined): AdminCalendarPrese
 export function parseAdminCalendarState(
   search: { get(name: string): string | null },
   timezone?: string,
-  now: Date = new Date(),
+  now: Date = serverNow(),
 ): AdminCalendarState {
   const range = parseRange(search.get("view") ?? search.get("range"));
   const grouping = parseGrouping(search.get("group"));

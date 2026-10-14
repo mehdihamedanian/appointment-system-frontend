@@ -236,7 +236,13 @@ export function BookingWizard() {
     }
   }, [currentStep, draft.date, goTo]);
 
+  const leavingWizard = wizard.status === "success" || wizard.status === "redirecting";
+
   useEffect(() => {
+    // The draft is reset on success; syncing it would replace the confirmation navigation.
+    if (leavingWizard) {
+      return;
+    }
     const params = new URLSearchParams();
     if (draft.serviceId) {
       params.set("service", draft.serviceId);
@@ -251,7 +257,7 @@ export function BookingWizard() {
     if (next !== current.toString()) {
       router.replace(`${routes.customer.booking}?${next}`, { scroll: false });
     }
-  }, [router, searchParams, currentStep, draft.branchId, draft.serviceId]);
+  }, [router, searchParams, currentStep, draft.branchId, draft.serviceId, leavingWizard]);
 
   useEffect(() => {
     const step = searchParams.get("step");
@@ -334,11 +340,13 @@ export function BookingWizard() {
   const quoteExpired = quoteQuery.data
     ? isQuoteExpired(quoteQuery.data, quoteQuery.dataUpdatedAt, quoteClock)
     : false;
-  const quoteReady = canSubmitQuote(quoteQuery.data, {
-    quoteReviewed: wizard.quoteReviewed,
-    policyAccepted,
-    expired: quoteExpired,
-  });
+  const quoteReady =
+    Boolean(wizard.draft.branchId) &&
+    canSubmitQuote(quoteQuery.data, {
+      quoteReviewed: wizard.quoteReviewed,
+      policyAccepted,
+      expired: quoteExpired,
+    });
 
   function invalidateQuoteCache() {
     void queryClient.removeQueries({ queryKey: ["booking", "quote"] });

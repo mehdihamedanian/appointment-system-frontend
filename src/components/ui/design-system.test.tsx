@@ -125,11 +125,23 @@ describe("design system", () => {
   it("announces calendar grid semantics and accepts keyboard movement", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<Calendar value="2026-08-21" onChange={onChange} />);
+    render(
+      <div dir="rtl">
+        <Calendar value="2026-08-21" today="2026-08-21" onChange={onChange} />
+      </div>,
+    );
     expect(screen.getByRole("grid", { name: "تقویم" })).toBeInTheDocument();
-    screen.getByRole("grid").focus();
+    expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("شنبه");
+    expect(screen.getAllByRole("row")).toHaveLength(7);
+    await user.tab();
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toHaveAttribute("data-date", "2026-08-21");
     await user.keyboard("{ArrowLeft}");
-    expect(onChange).toHaveBeenCalled();
+    expect(document.activeElement).toHaveAttribute("data-date", "2026-08-22");
+    expect(onChange).not.toHaveBeenCalled();
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledWith("2026-08-22");
   });
 
   it("renders table caption and header cells", () => {

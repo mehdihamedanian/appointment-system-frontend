@@ -30,9 +30,26 @@ describe("admin calendar range", () => {
       from: "2026-08-22",
       to: "2026-08-28",
     });
-    expect(visibleRangeFor("2026-08-25", "month", 6)).toEqual({
+    expect(visibleRangeFor("2026-08-25", "month", 6, "gregorian")).toEqual({
       from: "2026-08-01",
       to: "2026-08-31",
+    });
+  });
+
+  it("uses the Jalali month as the month range by default", () => {
+    // 2026-08-25 = 3 Shahrivar 1405; Shahrivar spans 2026-08-23 … 2026-09-22.
+    expect(visibleRangeFor("2026-08-25", "month", 6)).toEqual({
+      from: "2026-08-23",
+      to: "2026-09-22",
+    });
+    // Esfand 1403 has 30 days (leap year), Esfand 1404 has 29.
+    expect(visibleRangeFor("2025-03-10", "month", 6, "persian")).toEqual({
+      from: "2025-02-19",
+      to: "2025-03-20",
+    });
+    expect(visibleRangeFor("2026-03-10", "month", 6, "persian")).toEqual({
+      from: "2026-02-20",
+      to: "2026-03-20",
     });
   });
 
@@ -40,8 +57,28 @@ describe("admin calendar range", () => {
     expect(navigateCalendarDate("2026-08-25", "day", "next")).toBe("2026-08-26");
     expect(navigateCalendarDate("2026-08-25", "day", "prev")).toBe("2026-08-24");
     expect(navigateCalendarDate("2026-08-25", "week", "next")).toBe("2026-09-01");
-    expect(navigateCalendarDate("2026-08-25", "month", "prev")).toBe("2026-07-25");
+    expect(
+      navigateCalendarDate("2026-08-25", "month", "prev", "Asia/Tehran", new Date(), "gregorian"),
+    ).toBe("2026-07-25");
     expect(addDaysIso("2026-08-31", 1)).toBe("2026-09-01");
+  });
+
+  it("navigates Jalali months keeping the day of month and clamping", () => {
+    // 31 Mordad 1405 → Shahrivar has 31 days → 31 Shahrivar = 2026-09-22.
+    expect(navigateCalendarDate("2026-08-22", "month", "next", "Asia/Tehran", new Date(), "persian")).toBe(
+      "2026-09-22",
+    );
+    // 31 Shahrivar 1405 → Mehr has 30 days → clamp to 30 Mehr = 2026-10-22.
+    expect(navigateCalendarDate("2026-09-22", "month", "next", "Asia/Tehran", new Date(), "persian")).toBe(
+      "2026-10-22",
+    );
+  });
+
+  it("resolves today in the business timezone", () => {
+    // 21:00 UTC on 21 Aug is already 22 Aug in Tehran.
+    const now = new Date("2026-08-21T21:00:00Z");
+    expect(navigateCalendarDate("2026-01-01", "day", "today", "Asia/Tehran", now)).toBe("2026-08-22");
+    expect(navigateCalendarDate("2026-01-01", "day", "today", "UTC", now)).toBe("2026-08-21");
   });
 });
 

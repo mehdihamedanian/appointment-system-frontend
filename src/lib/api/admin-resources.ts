@@ -5,6 +5,7 @@ import {
   adaptAdminResourceImpactPreview,
   adaptAdminResourceList,
   adaptAdminResourceMutationResult,
+  adaptAdminResourceTypeOptions,
 } from "@/lib/admin/resource-adapter";
 import { filtersToAdminResourceParams } from "@/lib/admin/resource-filters";
 import { queryKeys } from "@/lib/query/keys";
@@ -16,6 +17,7 @@ import type {
   AdminResourceListFilters,
   AdminResourceListView,
   AdminResourceMutationResult,
+  AdminResourceTypeOption,
 } from "@/types/admin-resource";
 import { ADMIN_RESOURCE_LIST_LIMIT } from "@/types/admin-resource";
 
@@ -70,7 +72,7 @@ export async function createAdminResource(
       method: "POST",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: sanitizeResourceBody(input),
+      body: sanitizeResourceBody(input, "create"),
     });
     const view = adaptAdminResourceDetail(payload);
     if (!view) {
@@ -105,7 +107,7 @@ export async function updateAdminResource(
       method: "PATCH",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: sanitizeResourceBody(input),
+      body: sanitizeResourceBody(input, "update"),
     },
   );
   const view = adaptAdminResourceDetail(payload);
@@ -185,23 +187,37 @@ export async function submitAdminResourceLifecycleAction(
   return result;
 }
 
-function sanitizeResourceBody(input: AdminResourceFormInput): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    type: input.type === "unknown" ? undefined : input.type,
-    name: input.name.trim(),
-    description: input.description?.trim() || undefined,
-    branchId: input.branchId,
-    scheduleMode:
-      input.scheduleMode && input.scheduleMode !== "unknown" ? input.scheduleMode : undefined,
-    version: input.version,
-  };
+/** Backend `ResourceCreate`/`ResourceUpdate` forbid unknown fields; send only what they accept. */
+function sanitizeResourceBody(
+  input: AdminResourceFormInput,
+  mode: "create" | "update",
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { name: input.name.trim() };
+  if (mode === "create") body.resourceTypeId = input.resourceTypeId;
+  const description = input.description?.trim();
+  if (description) body.description = description;
   if (typeof input.capacity === "number" && Number.isFinite(input.capacity)) {
     body.capacity = input.capacity;
   }
-  if (input.type === "staff" && typeof input.customerVisible === "boolean") {
-    body.customerVisible = input.customerVisible;
-  }
+  if (input.branchId) body.branchIds = [input.branchId];
   return body;
+}
+
+export async function fetchAdminResourceTypes(
+  signal?: AbortSignal,
+): Promise<AdminResourceTypeOption[]> {
+  const payload = await apiClient<unknown>("/admin/resources/types", { method: "GET", signal });
+  return adaptAdminResourceTypeOptions(payload);
+}
+
+export function adminResourceTypesQueryOptions(userId: string) {
+  return {
+    queryKey: queryKeys.admin.resourceTypes(userId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => fetchAdminResourceTypes(signal),
+    enabled: Boolean(userId),
+    staleTime: 5 * 60_000,
+    retry: false,
+  };
 }
 
 export function adminResourceListQueryOptions(

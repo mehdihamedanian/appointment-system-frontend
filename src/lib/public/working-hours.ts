@@ -1,3 +1,4 @@
+import { serverNow } from "@/lib/date-time/server-clock";
 import type { WorkingHoursDay } from "@/types/public";
 
 const WEEKDAY_LABELS = [
@@ -62,7 +63,7 @@ export function displayOrder(days: WorkingHoursDay[]): WorkingHoursDay[] {
   });
 }
 
-export function weekdayInTimeZone(timeZone: string, now: Date = new Date()): number | null {
+export function weekdayInTimeZone(timeZone: string, now: Date = serverNow()): number | null {
   try {
     const weekday = new Intl.DateTimeFormat("en-US", {
       weekday: "short",
@@ -77,7 +78,7 @@ export function weekdayInTimeZone(timeZone: string, now: Date = new Date()): num
 export function isOpenNow(
   days: WorkingHoursDay[],
   timeZone: string | undefined,
-  now: Date = new Date(),
+  now: Date = serverNow(),
 ): boolean | null {
   if (!timeZone || days.length === 0) {
     return null;

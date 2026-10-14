@@ -1,3 +1,4 @@
+import { formatAppointmentParts, formatIsoDateLabel } from "@/lib/date-time/format";
 import type {
   DashboardCountMetric,
   DashboardMoneyMetric,
@@ -51,46 +52,11 @@ export function formatMoneyMetricValue(metric: DashboardMoneyMetric): {
   };
 }
 
-export function formatOperationalDateLabel(isoDate: string, timeZone?: string): string {
-  const date = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return isoDate;
-  }
-  try {
-    return new Intl.DateTimeFormat("fa-IR", {
-      calendar: "gregory",
-      timeZone: timeZone || undefined,
-      dateStyle: "full",
-    }).format(date);
-  } catch {
-    return new Intl.DateTimeFormat("fa-IR", {
-      calendar: "gregory",
-      dateStyle: "full",
-    }).format(date);
-  }
+/** Operational dates are business-local calendar dates; no timezone shift applies. */
+export function formatOperationalDateLabel(isoDate: string): string {
+  return formatIsoDateLabel(isoDate, { style: "full" }) ?? isoDate;
 }
 
 export function formatLastUpdatedLabel(iso: string | undefined, timeZone?: string): string | null {
-  if (!iso) {
-    return null;
-  }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  try {
-    return new Intl.DateTimeFormat("fa-IR", {
-      calendar: "gregory",
-      timeZone: timeZone || undefined,
-      dateStyle: "medium",
-      timeStyle: "short",
-      hourCycle: "h23",
-    }).format(date);
-  } catch {
-    return new Intl.DateTimeFormat("fa-IR", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      hourCycle: "h23",
-    }).format(date);
-  }
+  return iso ? (formatAppointmentParts(iso, timeZone)?.label ?? null) : null;
 }

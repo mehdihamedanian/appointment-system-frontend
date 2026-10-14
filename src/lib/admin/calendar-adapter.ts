@@ -72,14 +72,23 @@ export function adaptAdminCalendarEvent(
   canViewBlockReason = true,
 ): AdminCalendarEventView | null {
   if (!isRecord(value) || isInternalResource(value)) return null;
-  const type = adaptEventType(value.type ?? value.eventType ?? value.kind);
+  const type = adaptEventType(
+    value.type ?? value.eventType ?? value.event_type ?? value.kind,
+  );
   if (!type) return null;
-  const id = publicId(value.id) ?? publicId(value.eventId);
-  const startsAt = readString(value.startsAt) ?? readString(value.start);
-  const endsAt = readString(value.endsAt) ?? readString(value.end);
+  const id =
+    publicId(value.id) ??
+    publicId(value.eventId) ??
+    publicId(value.event_key) ??
+    publicId(value.booking_reference);
+  const startsAt =
+    readString(value.startsAt) ?? readString(value.starts_at) ?? readString(value.start);
+  const endsAt = readString(value.endsAt) ?? readString(value.ends_at) ?? readString(value.end);
   if (!id || !startsAt || !endsAt) return null;
 
-  const customerName = asSafeText(value.customerName) ??
+  const customerName =
+    asSafeText(value.customerName) ??
+    asSafeText(value.customer_display_name) ??
     (isRecord(value.customer) ? asSafeText(value.customer.name) : undefined);
   const serviceName = asSafeText(value.serviceName) ??
     (isRecord(value.service) ? asSafeText(value.service.name) : undefined);
@@ -97,13 +106,19 @@ export function adaptAdminCalendarEvent(
   const paymentStatus = parseStatusKey(value.paymentStatus);
   const appointmentReference =
     readString(value.appointmentReference) ??
+    readString(value.booking_reference) ??
     readString(value.reference) ??
     (type === "appointment" ? publicId(value.appointmentId) : undefined);
 
   const blockReason = canViewBlockReason
-    ? asSafeText(value.blockReason) ?? asSafeText(value.reason)
+    ? asSafeText(value.blockReason) ??
+      asSafeText(value.block_reason) ??
+      asSafeText(value.reason)
     : undefined;
-  const timeOffLabel = asSafeText(value.timeOffLabel) ?? asSafeText(value.label);
+  const timeOffLabel =
+    asSafeText(value.timeOffLabel) ??
+    asSafeText(value.time_off_reason) ??
+    asSafeText(value.label);
 
   const event: AdminCalendarEventView = {
     id,
@@ -114,12 +129,15 @@ export function adaptAdminCalendarEvent(
       publicId(value.columnId) ??
       publicId(value.groupId) ??
       publicId(value.staffId) ??
+      publicId(value.staff_id) ??
       publicId(value.resourceId) ??
+      publicId(value.resource_id) ??
       publicId(value.branchId) ??
+      publicId(value.branch_id) ??
       "general",
     title,
     accessibleName: "",
-    allDay: readBoolean(value.allDay) === true,
+    allDay: readBoolean(value.allDay) === true || readBoolean(value.is_full_day) === true,
   };
   if (customerName) event.customerName = customerName;
   if (serviceName) event.serviceName = serviceName;

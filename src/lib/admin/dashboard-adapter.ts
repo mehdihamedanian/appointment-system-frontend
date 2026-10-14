@@ -145,10 +145,19 @@ function readStatus(value: unknown): StatusKey | undefined {
 
 function readAppointmentId(source: Record<string, unknown>): string | undefined {
   const id =
+    readString(source.booking_reference) ??
     readString(source.id) ??
     readString(source.appointmentId) ??
     readString(source.reference);
   return isSafePublicId(id) ? id : undefined;
+}
+
+function firstStaffName(value: unknown): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const first: unknown = value[0];
+  return isRecord(first) ? readString(first.display_name) : undefined;
 }
 
 function readAdminDeepLink(value: unknown): string | undefined {
@@ -166,9 +175,12 @@ function adaptRecentAppointment(value: unknown): AdminRecentAppointment | null {
   const id = readAppointmentId(value);
   const serviceName =
     readString(value.serviceName) ??
-    (isRecord(value.service) ? readString(value.service.name) : undefined);
+    (isRecord(value.service)
+      ? readString(value.service.name) ?? readString(value.service.title)
+      : undefined);
   const startsAt =
     readString(value.startsAt) ??
+    readString(value.starts_at) ??
     readString(value.startAt) ??
     readString(value.scheduledAt);
   const rawStatus = value.status ?? value.appointmentStatus;
@@ -179,6 +191,7 @@ function adaptRecentAppointment(value: unknown): AdminRecentAppointment | null {
     asSafeText(value.customerName) ??
     (isRecord(value.customer)
       ? asSafeText(value.customer.displayName) ??
+        asSafeText(value.customer.display_name) ??
         asSafeText(value.customer.name) ??
         asSafeText(value.customer.maskedName)
       : undefined);
@@ -191,7 +204,8 @@ function adaptRecentAppointment(value: unknown): AdminRecentAppointment | null {
     (isRecord(value.provider)
       ? readString(value.provider.publicName) ?? readString(value.provider.name)
       : undefined) ??
-    (isRecord(value.staff) ? readString(value.staff.publicName) ?? readString(value.staff.name) : undefined);
+    (isRecord(value.staff) ? readString(value.staff.publicName) ?? readString(value.staff.name) : undefined) ??
+    firstStaffName(value.staff);
 
   const resourceName =
     readString(value.resourceName) ??
@@ -209,8 +223,11 @@ function adaptRecentAppointment(value: unknown): AdminRecentAppointment | null {
     startsAt,
     timezone: readString(value.timezone) ?? readString(value.timeZone),
     status,
-    paymentStatus: readStatus(value.paymentStatus),
-    reference: readString(value.reference) ?? readString(value.bookingReference),
+    paymentStatus: readStatus(value.paymentStatus ?? value.payment_status),
+    reference:
+      readString(value.reference) ??
+      readString(value.bookingReference) ??
+      readString(value.booking_reference),
   };
 }
 
@@ -443,6 +460,135 @@ export function adaptAdminDashboard(
     alerts: adaptAlerts(source.alerts ?? source.warnings ?? source.operationalAlerts),
     analytics: readAnalytics(source),
     manualBookingEnabled: readBoolean(source.manualBookingEnabled) === true,
+  };
+}
+
+export type DashboardSectionResult =
+  | { ok: true; payload: unknown }
+  | { ok: false; error: AppApiError };
+
+export type DashboardSummarySources = {
+  day: unknown;
+  analytics: DashboardSectionResult;
+  recent: DashboardSectionResult;
+};
+
+function summaryCount(value: unknown): DashboardCountMetric {
+  const count = readNumber(value);
+  return typeof count === "number" ? { state: "ready", value: Math.trunc(count) } : UNAVAILABLE_COUNT;
+}
+
+function summaryCountSum(...values: unknown[]): DashboardCountMetric {
+  let total = 0;
+  for (const value of values) {
+    const count = readNumber(value);
+    if (typeof count !== "number") {
+      return UNAVAILABLE_COUNT;
+    }
+    total += Math.trunc(count);
+  }
+  return { state: "ready", value: total };
+}
+
+function formatDecimalMoney(amount: number, currency?: string): string | undefined {
+  if (Number.isInteger(amount)) {
+    return formatCurrencyAmount(amount, currency);
+  }
+  try {
+    return new Intl.NumberFormat("fa-IR", {
+      style: currency ? "currency" : "decimal",
+      currency: currency || "IRR",
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return String(amount);
+  }
+}
+
+function summaryRevenue(value: unknown): DashboardMoneyMetric {
+  if (!isRecord(value)) {
+    return UNAVAILABLE_MONEY;
+  }
+  const amount = readNumber(value.net_revenue);
+  const amountLabel =
+    typeof amount === "number" ? formatDecimalMoney(amount, readString(value.currency)) : undefined;
+  return amountLabel ? { state: "ready", amountLabel } : UNAVAILABLE_MONEY;
+}
+
+function summaryPopularServices(value: unknown): WidgetResult<PopularServiceItem[]> {
+  const items = asList(value, [])
+    .map((item): PopularServiceItem | null => {
+      if (!isRecord(item)) {
+        return null;
+      }
+      const name = asSafeText(item.title);
+      if (!name) {
+        return null;
+      }
+      const count = readNumber(item.completed_appointment_count);
+      const share = readNumber(item.share_percentage);
+      return {
+        id: readString(item.service_id),
+        name,
+        countLabel: typeof count === "number" ? String(count) : undefined,
+        shareLabel: typeof share === "number" ? `${share}%` : undefined,
+      };
+    })
+    .filter((item): item is PopularServiceItem => Boolean(item));
+  return { status: "ready", data: items };
+}
+
+function summaryAnalytics(result: DashboardSectionResult): AdminDashboardAnalytics {
+  if (!result.ok) {
+    return {
+      newCustomers: { state: "error", error: result.error },
+      popularServices: { status: "error", error: result.error },
+    };
+  }
+  const root = unwrapPayload(result.payload);
+  const source = isRecord(root) ? root : {};
+  const customerTypes = isRecord(source.customer_types) ? source.customer_types : {};
+  return {
+    newCustomers: summaryCount(customerTypes.new_customers),
+    popularServices: summaryPopularServices(source.popular_services),
+  };
+}
+
+/**
+ * Adapts `GET /admin/dashboard/summary` (operational day + analytics range) and
+ * `GET /admin/appointments` (recent appointments of the operational day).
+ */
+export function adaptDashboardSummary(
+  sources: DashboardSummarySources,
+  fallbackDate: string,
+): AdminDashboardView {
+  const root = unwrapPayload(sources.day);
+  const source = isRecord(root) ? root : {};
+  const period = isRecord(source.period) ? source.period : {};
+  const filters = isRecord(source.filters) ? source.filters : {};
+  const appointments = isRecord(source.appointments) ? source.appointments : {};
+  const counts = isRecord(appointments.status_counts) ? appointments.status_counts : {};
+
+  return {
+    timezone: readString(period.timezone),
+    operationalDate: readString(period.start_date) ?? fallbackDate,
+    lastUpdatedAt: readString(source.generated_at),
+    branchId: readString(filters.branch_id),
+    operational: {
+      todayAppointments: summaryCount(appointments.total_count),
+      upcoming: summaryCountSum(counts.pending, counts.confirmed),
+      needingAction: summaryCount(counts.pending),
+      completed: summaryCount(counts.completed),
+      cancelled: summaryCount(counts.cancelled),
+      noShow: summaryCount(counts.no_show),
+      todayRevenue: summaryRevenue(source.revenue),
+    },
+    recentAppointments: sources.recent.ok
+      ? adaptRecentAppointments(unwrapPayload(sources.recent.payload))
+      : { status: "error", error: sources.recent.error },
+    alerts: [],
+    analytics: summaryAnalytics(sources.analytics),
+    manualBookingEnabled: false,
   };
 }
 

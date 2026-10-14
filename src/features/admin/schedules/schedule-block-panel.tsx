@@ -8,6 +8,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { IconButton } from "@/components/ui/icon-button";
 import { Switch } from "@/components/ui/selection";
+import { formatScheduleRange } from "@/lib/admin/schedule-target-backend";
 import type { AdminScheduleBlockItem, AdminScheduleScope } from "@/types/admin-schedule";
 
 export function ScheduleBlockPanel({
@@ -15,6 +16,8 @@ export function ScheduleBlockPanel({
   scope,
   disabled,
   deletingId,
+  dayRangeOnly = false,
+  timeZone,
   onCreate,
   onDelete,
 }: {
@@ -22,6 +25,9 @@ export function ScheduleBlockPanel({
   scope: AdminScheduleScope;
   disabled?: boolean;
   deletingId?: string;
+  /** Whole-day ranges with a required reason; no all-day switch or internal note. */
+  dayRangeOnly?: boolean;
+  timeZone?: string;
   onCreate: (body: {
     startsAt: string;
     endsAt: string;
@@ -37,9 +43,20 @@ export function ScheduleBlockPanel({
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
 
+  const trimmedReason = reason.trim();
+  const rangeInvalid = Boolean(startsAt && endsAt && endsAt < startsAt);
+  const canSubmit =
+    Boolean(startsAt && endsAt) && !rangeInvalid && (!dayRangeOnly || trimmedReason.length > 0);
+
   function submit() {
-    if (!startsAt || !endsAt) return;
-    onCreate({ startsAt, endsAt, allDay, reason: reason || undefined, note: note || undefined });
+    if (!canSubmit) return;
+    onCreate({
+      startsAt,
+      endsAt,
+      allDay: dayRangeOnly ? true : allDay,
+      reason: trimmedReason || undefined,
+      note: dayRangeOnly ? undefined : note || undefined,
+    });
     setReason("");
     setNote("");
   }
@@ -51,16 +68,17 @@ export function ScheduleBlockPanel({
       </h3>
       <p className="ds-help">
         مسدودی عملیاتی — Backend در دسترس‌بودن را تعیین می‌کند. رفع مسدودی فقط همان رکورد را
-        حذف می‌کند.
+        {dayRangeOnly ? " آزاد می‌کند و در سابقه باقی می‌ماند." : " حذف می‌کند."}
       </p>
+      {dayRangeOnly ? (
+        <p className="ds-help">بازه شامل کل روزهای انتخاب‌شده (از ابتدای روز شروع تا پایان روز آخر) است.</p>
+      ) : null}
 
       {items.length === 0 ? <p className="ds-help">مسدودی ثبت نشده.</p> : null}
       <ul className="admin-schedule-list">
         {items.map((item) => (
           <li key={item.id} className="admin-schedule-list__item">
-            <span className="ltr-value">
-              {item.startsAt} — {item.endsAt}
-            </span>
+            <span>{formatScheduleRange(item.startsAt, item.endsAt, timeZone)}</span>
             {item.reason ? <span>{item.reason}</span> : null}
             <IconButton
               size="sm"
@@ -79,17 +97,28 @@ export function ScheduleBlockPanel({
           <FormField id="block-start" label="شروع">
             <DatePicker id="block-start" value={startsAt || undefined} onChange={(value) => setStartsAt(value ?? "")} />
           </FormField>
-          <FormField id="block-end" label="پایان">
+          <FormField
+            id="block-end"
+            label="پایان"
+            error={rangeInvalid ? "تاریخ پایان نباید پیش از شروع باشد." : undefined}
+          >
             <DatePicker id="block-end" value={endsAt || undefined} onChange={(value) => setEndsAt(value ?? "")} />
           </FormField>
-          <Switch label="تمام‌روز" checked={allDay} onCheckedChange={setAllDay} />
-          <FormField id="block-reason" label="دلیل">
-            <Input id="block-reason" value={reason} onChange={(event) => setReason(event.target.value)} />
+          {dayRangeOnly ? null : <Switch label="تمام‌روز" checked={allDay} onCheckedChange={setAllDay} />}
+          <FormField id="block-reason" label="دلیل" required={dayRangeOnly}>
+            <Input
+              id="block-reason"
+              value={reason}
+              required={dayRangeOnly}
+              onChange={(event) => setReason(event.target.value)}
+            />
           </FormField>
-          <FormField id="block-note" label="یادداشت داخلی">
-            <Input id="block-note" value={note} onChange={(event) => setNote(event.target.value)} />
-          </FormField>
-          <Button type="button" disabled={!startsAt || !endsAt} onClick={submit}>
+          {dayRangeOnly ? null : (
+            <FormField id="block-note" label="یادداشت داخلی">
+              <Input id="block-note" value={note} onChange={(event) => setNote(event.target.value)} />
+            </FormField>
+          )}
+          <Button type="button" disabled={!canSubmit} onClick={submit}>
             ثبت مسدودی ({scope})
           </Button>
         </div>

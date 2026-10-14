@@ -297,7 +297,7 @@ export function AdminServiceForm({
 
   async function onImageSelected(file: File | undefined) {
     if (!file || !reference) return;
-    if (!file.type.startsWith("image/")) {
+    if (!IMAGE_ACCEPT.split(",").includes(file.type)) {
       setImageError("فقط فایل تصویری مجاز است.");
       return;
     }

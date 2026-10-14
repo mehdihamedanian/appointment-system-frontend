@@ -47,7 +47,7 @@ export function AdminCalendarToolbar({
   onOpenFilters: () => void;
   showQuickAdd: boolean;
 }) {
-  const dateLabel = formatOperationalDateLabel(state.date, timezone);
+  const dateLabel = formatOperationalDateLabel(state.date);
   const updated = formatLastUpdatedLabel(lastUpdatedAt, timezone);
   const quickAddHref = manualBookingHrefFromCalendar(state);
 
@@ -72,6 +72,7 @@ export function AdminCalendarToolbar({
         <DatePicker
           id="admin-calendar-date"
           value={state.date}
+          timeZone={timezone}
           onChange={(value) => {
             if (value) onDateChange(value);
           }}

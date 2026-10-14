@@ -1,4 +1,4 @@
-import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
+import { asList, asSafeText, readBoolean, readUrl, unwrapPayload } from "@/lib/public/read";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { isRecord, readString } from "@/lib/utilities/records";
 import {
@@ -85,9 +85,9 @@ function adaptLocation(value: unknown): AdminBranchLocationView | undefined {
   const lng = readNumber(value.longitude ?? value.lng ?? value.lon);
   if (lat != null) location.latitude = lat;
   if (lng != null) location.longitude = lng;
-  const mapUrl = asSafeText(value.mapUrl) ?? asSafeText(value.mapLink);
+  const mapUrl = readUrl(value.mapUrl) ?? readUrl(value.mapLink);
   if (mapUrl) location.mapUrl = mapUrl;
-  const directionsUrl = asSafeText(value.directionsUrl);
+  const directionsUrl = readUrl(value.directionsUrl);
   if (directionsUrl) location.directionsUrl = directionsUrl;
   const label = asSafeText(value.label) ?? asSafeText(value.name);
   if (label) location.label = label;

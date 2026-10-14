@@ -4,6 +4,7 @@ import {
   asSafeText,
   readBoolean,
   readNumber,
+  readUrl,
   unwrapPayload,
 } from "@/lib/public/read";
 import { isRecord, readString } from "@/lib/utilities/records";
@@ -264,7 +265,7 @@ function adaptBreakdownRow(value: unknown, index: number): AdminReportBreakdownR
   };
   const secondaryLabel = asSafeText(value.secondaryLabel ?? value.subtitle ?? value.maskedId);
   if (secondaryLabel) row.secondaryLabel = secondaryLabel;
-  const href = readString(value.href);
+  const href = readUrl(value.href);
   if (href && href.startsWith("/")) row.href = href;
   return row;
 }
@@ -545,8 +546,8 @@ export function adaptAdminReportExport(payload: unknown, reportType: AdminReport
     reportType: parseAdminReportType(root.reportType ?? reportType),
   };
   // Prefer relative or absolute https download URLs — never put auth tokens in app routes.
-  const downloadUrl = readString(root.downloadUrl ?? root.url ?? root.fileUrl);
-  if (downloadUrl && (downloadUrl.startsWith("https://") || downloadUrl.startsWith("http://") || downloadUrl.startsWith("/"))) {
+  const downloadUrl = readUrl(root.downloadUrl ?? root.url ?? root.fileUrl);
+  if (downloadUrl) {
     view.downloadUrl = downloadUrl;
   }
   const expiresAtLabel = asSafeText(root.expiresAtLabel ?? root.expiresAt);

@@ -47,6 +47,7 @@ import {
   isRescheduleSlotTakenError,
   rescheduleConflictMessage,
 } from "@/lib/customer/reschedule-errors";
+import { queryKeys } from "@/lib/query/keys";
 import {
   rescheduleIdempotencyKey,
   rescheduleIntentFingerprint,
@@ -113,7 +114,13 @@ function RescheduleSuccess({
       </section>
       <div className="appointment-reschedule__actions">
         <Button asChild>
-          <Link href={routes.customer.appointmentDetail(reference)}>مشاهده نوبت</Link>
+          <Link
+            href={routes.customer.appointmentDetail(
+              isSafePublicId(result.appointmentReference) ? result.appointmentReference : reference,
+            )}
+          >
+            مشاهده نوبت
+          </Link>
         </Button>
         <Button variant="secondary" asChild>
           <Link href={routes.customer.appointments}>بازگشت به نوبت‌های من</Link>
@@ -252,7 +259,7 @@ export function AppointmentRescheduleScreen({ reference }: { reference: string }
       if (isRescheduleSlotTakenError(normalized)) {
         setConflictMessage(rescheduleConflictMessage(normalized));
         clearSlotSelection();
-        await quoteQuery.refetch();
+        await queryClient.invalidateQueries({ queryKey: queryKeys.reschedule.all });
         conflictAnnouncerRef.current?.focus();
         return;
       }

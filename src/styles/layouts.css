@@ -226,6 +226,7 @@
 }
 
 .customer-shell {
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr auto;
   padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
 }
@@ -284,12 +285,12 @@
 }
 
 .admin-shell {
-  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
 }
 
 .admin-shell.is-collapsed {
-  grid-template-columns: var(--sidebar-width-collapsed) 1fr;
+  grid-template-columns: var(--sidebar-width-collapsed) minmax(0, 1fr);
 }
 
 .admin-sidebar {
@@ -381,6 +382,7 @@
   grid-column: 2;
   width: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-content: start;
   padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
@@ -1383,12 +1385,25 @@
   .customer-nav-desktop {
     display: flex;
   }
+
+  .customer-nav-desktop {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .customer-nav-desktop .nav-link {
+    padding-inline: var(--space-2);
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 1023px) {
   .admin-shell,
   .admin-shell.is-collapsed {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-sidebar--desktop {
@@ -3315,6 +3330,10 @@
   justify-content: space-between;
   gap: var(--space-2);
   align-items: start;
+}
+
+.admin-resource-card__title {
+  font-size: inherit;
 }
 
 .admin-resource-row-actions {

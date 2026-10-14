@@ -1,6 +1,6 @@
 import { apiClient } from "@/lib/api/client";
 import { adaptSessionUser } from "@/lib/api/session-adapter";
-import { maskPhone } from "@/lib/auth/phone";
+import { maskPhone, toE164IranMobile } from "@/lib/auth/phone";
 import { isRecord, readString } from "@/lib/utilities/records";
 import type { AuthChallenge } from "@/lib/auth/challenge-store";
 import type { OtpPurpose } from "@/config/auth";
@@ -87,16 +87,18 @@ export async function loginWithPassword(phone: string, password: string) {
   return adaptAuthSuccess(
     await apiClient("/auth/login", {
       method: "POST",
-      body: { phone, password },
+      body: { identifier: toE164IranMobile(phone), password },
+      notifyUnauthorized: false,
     }),
   );
 }
 
 export async function adminLogin(phone: string, password: string) {
   return adaptAuthSuccess(
-    await apiClient("/auth/admin/login", {
+    await apiClient("/auth/login", {
       method: "POST",
-      body: { phone, password },
+      body: { identifier: toE164IranMobile(phone), password },
+      notifyUnauthorized: false,
     }),
   );
 }
@@ -113,7 +115,7 @@ export async function registerCustomer(input: {
     body: {
       firstName: input.firstName,
       lastName: input.lastName,
-      phone: input.phone,
+      phone: toE164IranMobile(input.phone),
       password: input.password,
       consent: input.consent,
     },
@@ -125,11 +127,17 @@ export async function registerCustomer(input: {
   } catch {
     challenge = null;
   }
+  if (challenge) {
+    return { user: null, challenge, signInRequired: false };
+  }
 
-  return {
-    ...adaptAuthSuccess(payload),
-    challenge,
-  };
+  // Registration returns the new user but no session cookies; only login issues them.
+  try {
+    const session = await loginWithPassword(input.phone, input.password);
+    return { user: session.user, challenge: null, signInRequired: !session.user };
+  } catch {
+    return { user: null, challenge: null, signInRequired: true };
+  }
 }
 
 export async function requestOtp(phone: string, purpose: OtpPurpose) {

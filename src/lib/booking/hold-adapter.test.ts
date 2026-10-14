@@ -33,6 +33,22 @@ describe("slot hold adapter", () => {
     expect(JSON.stringify(hold)).not.toMatch(/secret_value|tok_secret|lock_1|room_9|clientSecret/);
   });
 
+  it("maps Backend HoldRead token/state/expires_at", () => {
+    const hold = adaptSlotHold({
+      success: true,
+      data: {
+        token: "hold_token_abc",
+        state: "held",
+        starts_at: "2026-08-22T05:30:00Z",
+        expires_at: "2026-08-22T10:05:00.000Z",
+      },
+    });
+    expect(hold?.holdId).toBe("hold_token_abc");
+    expect(hold?.status).toBe("active");
+    expect(hold?.expiresAt).toBe("2026-08-22T10:05:00.000Z");
+    expect(hold?.slot.startsAt).toBe("2026-08-22T05:30:00Z");
+  });
+
   it("rejects numeric-only ids as public hold references", () => {
     expect(adaptSlotHold({ id: "12", status: "active", expiresAt: "2026-08-22T10:05:00.000Z" })).toBeNull();
   });

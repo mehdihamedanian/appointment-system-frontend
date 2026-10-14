@@ -177,11 +177,19 @@ function maskEmail(value: string): string {
   return `${local.slice(0, 1)}•••@${domain}`;
 }
 
+function readFirstName(root: Record<string, unknown>): string | undefined {
+  return asSafeText(root.firstName) ?? asSafeText(root.first_name);
+}
+
+function readLastName(root: Record<string, unknown>): string | undefined {
+  return asSafeText(root.lastName) ?? asSafeText(root.last_name);
+}
+
 function readStaffName(root: Record<string, unknown>): string | undefined {
   const full = asSafeText(root.name) ?? asSafeText(root.fullName) ?? asSafeText(root.displayName);
   if (full) return full;
-  const first = asSafeText(root.firstName);
-  const last = asSafeText(root.lastName);
+  const first = readFirstName(root);
+  const last = readLastName(root);
   if (first || last) return [first, last].filter(Boolean).join(" ");
   return undefined;
 }
@@ -194,9 +202,10 @@ function adaptListItem(value: unknown): AdminStaffListItem | null {
   if (!id || !reference || !name) return null;
 
   const lifecycle = adaptAdminStaffLifecycle(
-    value.lifecycle ?? value.status ?? value.active ?? value.state,
+    value.lifecycle ?? value.status ?? value.active ?? value.is_active ?? value.state,
   );
-  const resourceRef = publicId(value.resourceReference) ?? publicId(value.resourceId);
+  const resourceRef =
+    publicId(value.resourceReference) ?? publicId(value.resourceId) ?? publicId(value.resource_id);
 
   const item: AdminStaffListItem = {
     id,
@@ -211,7 +220,8 @@ function adaptListItem(value: unknown): AdminStaffListItem | null {
     allowedActions: adaptAllowedActions(value),
   };
 
-  const jobTitle = asSafeText(value.jobTitle) ?? asSafeText(value.title);
+  const jobTitle =
+    asSafeText(value.jobTitle) ?? asSafeText(value.job_title) ?? asSafeText(value.title);
   if (jobTitle) item.jobTitle = jobTitle;
   const specialty = asSafeText(value.specialty) ?? asSafeText(value.specialization);
   if (specialty) item.specialty = specialty;
@@ -293,8 +303,12 @@ export function adaptAdminStaffDetail(payload: unknown): AdminStaffDetailView | 
   const canViewPrivate = allowedActions.viewPrivateContact === true;
   const capabilitiesSource = isRecord(root.capabilities) ? root.capabilities : root;
 
-  const resourceReference = publicId(root.resourceReference) ?? publicId(root.resourceId);
-  const adminUserReference = publicId(root.adminUserReference) ?? publicId(root.userId);
+  const resourceReference =
+    publicId(root.resourceReference) ?? publicId(root.resourceId) ?? publicId(root.resource_id);
+  const adminUserReference =
+    publicId(root.adminUserReference) ??
+    publicId(root.userId) ??
+    (isRecord(root.user) ? publicId(root.user.id) : undefined);
   const hasPerformance = readBoolean(capabilitiesSource.hasPerformance) === true;
   const hasAvatarUpload = readBoolean(capabilitiesSource.hasAvatarUpload) === true;
   const hasCalendar = readBoolean(capabilitiesSource.hasCalendar) !== false;
@@ -302,8 +316,8 @@ export function adaptAdminStaffDetail(payload: unknown): AdminStaffDetailView | 
   return {
     id: listItem.id,
     reference: listItem.reference,
-    firstName: asSafeText(root.firstName),
-    lastName: asSafeText(root.lastName),
+    firstName: readFirstName(root),
+    lastName: readLastName(root),
     name: listItem.name,
     jobTitle: listItem.jobTitle,
     specialty: listItem.specialty,

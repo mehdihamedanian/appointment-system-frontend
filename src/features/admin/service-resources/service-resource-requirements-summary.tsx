@@ -14,9 +14,9 @@ export function ServiceResourceRequirementsSummary({
   if (!lines.length && !(duplicateWarnings?.length ?? 0)) {
     return (
       <section className="admin-service-requirements-summary" aria-labelledby="req-summary-title">
-        <h3 id="req-summary-title" className="text-card-title">
+        <h2 id="req-summary-title" className="text-card-title">
           {title}
-        </h3>
+        </h2>
         <p className="ds-help">هنوز نیازمندی منبعی تعریف نشده است.</p>
       </section>
     );
@@ -24,9 +24,9 @@ export function ServiceResourceRequirementsSummary({
 
   return (
     <section className="admin-service-requirements-summary" aria-labelledby="req-summary-title">
-      <h3 id="req-summary-title" className="text-card-title">
+      <h2 id="req-summary-title" className="text-card-title">
         {title}
-      </h3>
+      </h2>
       {lines.length > 0 ? (
         <ul className="admin-service-requirements-summary__list">
           {lines.map((line) => (

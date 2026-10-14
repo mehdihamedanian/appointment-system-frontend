@@ -34,8 +34,10 @@ import {
   confirmAdminManualBooking,
   fetchAdminManualBookingQuote,
   fetchAdminResourceAllocation,
+  fetchAdminServiceBranches,
 } from "@/lib/api/admin-manual-booking";
 import { isResourceConflictError } from "@/lib/admin/manual-booking-adapter";
+import { startTimeFromSlotId } from "@/lib/api/backend-contract";
 import {
   applyAllocationChange,
   applyBranchChange,
@@ -56,7 +58,6 @@ import {
   fetchPublicBusiness,
   fetchPublicServiceCatalog,
   fetchPublicServiceDetail,
-  fetchServiceBranches,
 } from "@/lib/api/public";
 import {
   isForbiddenError,
@@ -195,9 +196,11 @@ function AdminManualBookingWizard({
   });
 
   const branchesQuery = useQuery({
-    queryKey: queryKeys.services.branches(draft.serviceId ?? "_"),
-    queryFn: ({ signal }) => fetchServiceBranches(draft.serviceId!, signal),
-    enabled: Boolean(draft.serviceId) && Boolean(businessQuery.data?.branchesEnabled),
+    queryKey: queryKeys.admin.manualBookingBranches(userId, draft.serviceId ?? "_"),
+    queryFn: ({ signal }) => fetchAdminServiceBranches(draft.serviceId!, signal),
+    enabled: Boolean(draft.serviceId),
+    staleTime: 60_000,
+    retry: false,
   });
 
   const providersQuery = useEligibleProviders({
@@ -208,7 +211,8 @@ function AdminManualBookingWizard({
 
   const optionsQuery = useQuery(adminManualBookingOptionsQueryOptions(userId));
 
-  const requiresBranch = businessQuery.data?.branchesEnabled === true;
+  // Backend availability and `ManualBookingCreate` both require `branch_id`.
+  const requiresBranch = businessQuery.data?.branchesEnabled !== false;
   const providerMode = providersQuery.data?.mode ?? "not_applicable";
   const branchIds = useMemo(() => (branchesQuery.data ?? []).map((item) => item.id), [branchesQuery.data]);
 
@@ -232,10 +236,10 @@ function AdminManualBookingWizard({
     setQuoteReceivedAt(quoteQuery.dataUpdatedAt || 0);
   }
 
-  const allocationFingerprint = adminManualBookingIntentFingerprint(draft);
   const allocationQuery = useQuery({
-    queryKey: queryKeys.admin.manualBookingAllocation(userId, allocationFingerprint),
-    queryFn: ({ signal }) => fetchAdminResourceAllocation(draft, signal),
+    queryKey: queryKeys.admin.manualBookingAllocation(userId, `${draft.serviceId}:${draft.branchId ?? ""}`),
+    queryFn: ({ signal }) =>
+      fetchAdminResourceAllocation({ serviceId: draft.serviceId, branchId: draft.branchId }, signal),
     enabled:
       currentStep === "resources" &&
       Boolean(draft.customerId && draft.serviceId && draft.slotId && draft.date),
@@ -292,7 +296,7 @@ function AdminManualBookingWizard({
         if (
           draft.allocationMode !== "automatic" &&
           canViewResources &&
-          allocationQuery.data?.groups.some((group) => group.items.some((item) => item.required))
+          (allocationQuery.data?.groups.length ?? 0) > 0
         ) {
           return Object.values(draft.resourceSelections).some((ids) => ids.length > 0);
         }
@@ -339,7 +343,7 @@ function AdminManualBookingWizard({
     try {
       let quote = quoteQuery.data;
       if (!quote || isQuoteExpired(quote, quoteReceivedAt, Date.now())) {
-        quote = await fetchAdminManualBookingQuote(draft);
+        quote = await fetchAdminManualBookingQuote();
         setQuoteReceivedAt(Date.now());
         if (quote.changed) {
           setNotice("quote_changed");
@@ -372,10 +376,10 @@ function AdminManualBookingWizard({
         return;
       }
       invalidateAfterAdminManualBooking(queryClient, userId, result.reference);
-      const parts = formatAppointmentParts(
-        quote.slot?.startsAt ?? `${draft.date}T00:00:00.000Z`,
-        quote.timezone ?? businessQuery.data?.timezone,
-      );
+      const startsAt = quote.slot?.startsAt ?? startTimeFromSlotId(draft.slotId);
+      const parts = startsAt
+        ? formatAppointmentParts(startsAt, quote.timezone ?? businessQuery.data?.timezone)
+        : undefined;
       setSuccess({
         reference: result.reference,
         customerName: customer?.displayName ?? "—",
@@ -582,7 +586,13 @@ function AdminManualBookingWizard({
                   error={catalogQuery.isError ? toAppApiError(catalogQuery.error) : undefined}
                   onRetry={() => void catalogQuery.refetch()}
                   submitted={submittedStep === "service"}
-                  onSelect={(serviceId) => patchDraft((current) => applyServiceChange(current, serviceId))}
+                  onSelect={(serviceId) =>
+                    patchDraft((current) => {
+                      const next = applyServiceChange(current, serviceId);
+                      const urlBranch = searchParams.get("branch");
+                      return urlBranch && !next.branchId ? applyBranchChange(next, urlBranch) : next;
+                    })
+                  }
                 />
                 {requiresBranch && draft.serviceId ? (
                   <BranchStep
@@ -687,6 +697,11 @@ function AdminManualBookingWizard({
                     description={toAppApiError(quoteQuery.error).message}
                     onRetry={() => void quoteQuery.refetch()}
                   />
+                ) : null}
+                {quoteQuery.data?.pricedAtBooking ? (
+                  <p className="ds-help">
+                    مبلغ و وضعیت پرداخت را سرویس نوبت‌دهی هنگام ثبت نوبت تعیین می‌کند.
+                  </p>
                 ) : null}
                 {quoteQuery.data ? (
                   <>

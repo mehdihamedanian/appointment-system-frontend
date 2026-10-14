@@ -4,11 +4,73 @@ import {
   adaptAdminResourceImpactPreview,
   adaptAdminResourceList,
   adaptAdminResourceType,
+  adaptAdminResourceTypeOptions,
   isDuplicateResourceError,
   isInternalOperationalResourceType,
 } from "@/lib/admin/resource-adapter";
 
 describe("admin resource adapter", () => {
+  it("reads Backend ResourceListItem and ResourceRead fields", () => {
+    const list = adaptAdminResourceList(
+      {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "9f1d3c2a-0000-4000-8000-0000000000aa",
+              resource_type_code: "device",
+              resource_type_display_name: "Device",
+              name: "لیزر",
+              is_active: false,
+              capacity: 2,
+              branch_count: 0,
+            },
+          ],
+          meta: { page: 1, page_size: 20, total: 1 },
+        },
+      },
+      1,
+    );
+    expect(list.items[0]?.type).toBe("device");
+    expect(list.items[0]?.lifecycle).toBe("inactive");
+    expect(list.items[0]?.capacity?.value).toBe(2);
+
+    const detail = adaptAdminResourceDetail({
+      success: true,
+      data: {
+        id: "9f1d3c2a-0000-4000-8000-0000000000aa",
+        resource_type: { id: "rt", code: "kiosk", display_name: "Kiosk", is_system: false },
+        name: "کیوسک",
+        is_active: true,
+        capacity: 1,
+        branches: [{ id: "9f1d3c2a-0000-4000-8000-0000000000dd", name: "مرکزی", is_active: true }],
+      },
+    });
+    expect(detail?.type).toBe("unknown");
+    expect(detail?.typeLabel).toBe("Kiosk");
+    expect(detail?.lifecycle).toBe("active");
+    expect(detail?.branch?.name).toBe("مرکزی");
+  });
+
+  it("adapts GET /resources/types and flags human types", () => {
+    const options = adaptAdminResourceTypeOptions({
+      success: true,
+      data: [
+        { id: "9f1d3c2a-0000-4000-8000-000000000001", code: "staff", display_name: "Staff" },
+        { id: "9f1d3c2a-0000-4000-8000-000000000002", code: "specialist", display_name: "Specialist" },
+        { id: "9f1d3c2a-0000-4000-8000-000000000003", code: "room", display_name: "Room" },
+        { id: "9f1d3c2a-0000-4000-8000-000000000004", code: "kiosk", display_name: "Kiosk" },
+        { code: "desk", display_name: "Desk" },
+      ],
+    });
+    expect(options.map((option) => [option.code, option.label, option.human])).toEqual([
+      ["staff", "کارمند", true],
+      ["specialist", "متخصص", true],
+      ["room", "اتاق", false],
+      ["kiosk", "Kiosk", false],
+    ]);
+  });
+
   it("maps known and unknown resource types with neutral fallback", () => {
     expect(adaptAdminResourceType("room")).toBe("room");
     expect(adaptAdminResourceType("provider")).toBe("staff");

@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER } from "next/constants";
+import { validateProductionEnv } from "./src/config/production-env";
 
 function hostnameFrom(value: string | undefined): string | undefined {
   if (!value) {
@@ -9,6 +11,16 @@ function hostnameFrom(value: string | undefined): string | undefined {
     return url.hostname;
   } catch {
     return undefined;
+  }
+}
+
+function assertProductionEnv() {
+  const { errors, warnings } = validateProductionEnv(process.env);
+  for (const warning of warnings) {
+    console.warn(`⚠ env: ${warning}`);
+  }
+  if (errors.length > 0) {
+    throw new Error(`Invalid production environment:\n- ${errors.join("\n- ")}`);
   }
 }
 
@@ -25,6 +37,20 @@ const mediaHosts = Array.from(
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: mediaHosts.flatMap((hostname) => [
       { protocol: "https", hostname, pathname: "/**" },
@@ -33,4 +59,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  if (phase === PHASE_PRODUCTION_BUILD || phase === PHASE_PRODUCTION_SERVER) {
+    assertProductionEnv();
+  }
+  return nextConfig;
+}

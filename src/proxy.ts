@@ -6,13 +6,17 @@ const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME ?? "session";
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  // The page-level notFound() streams a 200 soft-404; refuse dev tools before rendering.
+  if (process.env.NODE_ENV === "production" && /^\/dev(\/|$)/.test(pathname)) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
 
   const decision = resolveProxyNavigation({
     pathname,
     search,
-    redirectParam: request.nextUrl.searchParams.get("redirect"),
     hasSessionCookie: request.cookies.has(SESSION_COOKIE_NAME),
   });
 

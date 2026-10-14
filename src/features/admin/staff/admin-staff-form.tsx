@@ -7,9 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { Input, Textarea } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { MultiSelect } from "@/components/ui/select";
-import { Switch } from "@/components/ui/selection";
+import { MultiSelect, Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/feedback/confirm-dialog";
 import { ApiErrorState } from "@/components/feedback/app-states";
 import { InlineLoading } from "@/components/feedback/loading-states";
@@ -23,6 +21,7 @@ import {
   isDuplicateStaffError,
 } from "@/lib/admin/staff-adapter";
 import { invalidateAfterAdminStaffMutation } from "@/lib/admin/staff-cache";
+import { adminResourceTypesQueryOptions } from "@/lib/api/admin-resources";
 import {
   createAdminStaff,
   removeAdminStaffAvatar,
@@ -40,36 +39,19 @@ import { fetchPublicBranches, fetchPublicBusiness } from "@/lib/api/public";
 import { isCapabilityVisible, getBusinessCapabilities } from "@/config/capabilities";
 import { queryKeys } from "@/lib/query/keys";
 import { routes } from "@/constants/routes";
-import {
-  ADMIN_STAFF_SCHEDULE_MODE_LABELS,
-  type AdminStaffDetailView,
-  type AdminStaffFormInput,
-  type AdminStaffScheduleMode,
-} from "@/types/admin-staff";
+import type { AdminStaffDetailView, AdminStaffFormInput } from "@/types/admin-staff";
 
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_ACCEPT = "image/jpeg,image/png,image/webp";
 
 function formFromDetail(detail?: AdminStaffDetailView | null): AdminStaffFormInput {
-  const primary = detail?.branches.find((b) => b.primary)?.id ?? detail?.branches[0]?.id;
   return {
     firstName: detail?.firstName ?? "",
     lastName: detail?.lastName ?? "",
-    name: detail?.name ?? "",
     jobTitle: detail?.jobTitle ?? "",
     specialty: detail?.specialty ?? "",
     publicDescription: detail?.publicDescription ?? "",
-    phone: detail?.privateContact?.masked ? "" : detail?.privateContact?.phone ?? "",
-    email: detail?.privateContact?.masked ? "" : detail?.privateContact?.email ?? "",
     branchIds: detail?.branches.map((b) => b.id) ?? [],
-    primaryBranchId: primary,
-    serviceIds: detail?.services.map((s) => s.id) ?? [],
-    customerVisible: detail?.customerVisible ?? false,
-    bookable: detail?.bookable ?? true,
-    scheduleMode:
-      detail?.schedule?.mode && detail.schedule.mode !== "unknown"
-        ? detail.schedule.mode
-        : "inherit_business",
     version: detail?.version,
   };
 }
@@ -79,13 +61,11 @@ export function AdminStaffForm({
   mode,
   reference,
   initial,
-  serviceOptions = [],
 }: {
   userId: string;
   mode: "create" | "edit";
   reference?: string;
   initial?: AdminStaffDetailView | null;
-  serviceOptions?: Array<{ value: string; label: string }>;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -110,6 +90,7 @@ export function AdminStaffForm({
   const [avatarError, setAvatarError] = useState<string>();
 
   const dirty = JSON.stringify(form) !== baseline;
+  const displayName = [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(" ");
   const canUploadAvatar =
     mode === "edit" &&
     Boolean(reference) &&
@@ -130,6 +111,17 @@ export function AdminStaffForm({
     enabled: multiBranch,
     staleTime: 60_000,
   });
+  const typesQuery = useQuery({
+    ...adminResourceTypesQueryOptions(userId),
+    enabled: mode === "create" && Boolean(userId),
+  });
+
+  /** A StaffProfile can only sit on a human resource type (Backend: staff or specialist). */
+  const typeOptions = (typesQuery.data ?? []).filter((option) => option.human);
+  const selectedType =
+    typeOptions.find((option) => option.id === form.resourceTypeId) ??
+    typeOptions.find((option) => option.code === "staff") ??
+    typeOptions[0];
 
   useEffect(() => {
     if (!dirty) return;
@@ -149,7 +141,9 @@ export function AdminStaffForm({
 
   function validate(): boolean {
     const next: typeof fieldErrors = {};
-    if (!form.name.trim()) next.name = "نام کارمند را وارد کنید.";
+    if (!form.firstName.trim()) next.firstName = "نام را وارد کنید.";
+    if (!form.lastName.trim()) next.lastName = "نام خانوادگی را وارد کنید.";
+    if (mode === "create" && !selectedType) next.resourceTypeId = "نوع کارمند را انتخاب کنید.";
     if (multiBranch && form.branchIds.length === 0) {
       next.branchIds = "حداقل یک شعبه انتخاب کنید.";
     }
@@ -169,14 +163,7 @@ export function AdminStaffForm({
     try {
       const payload: AdminStaffFormInput = {
         ...form,
-        name: form.name.trim(),
-        firstName: form.firstName?.trim() || undefined,
-        lastName: form.lastName?.trim() || undefined,
-        jobTitle: form.jobTitle?.trim() || undefined,
-        specialty: form.specialty?.trim() || undefined,
-        publicDescription: form.publicDescription?.trim() || undefined,
-        phone: form.phone?.trim() || undefined,
-        email: form.email?.trim() || undefined,
+        resourceTypeId: mode === "create" ? selectedType?.id : undefined,
       };
       const result =
         mode === "create"
@@ -214,17 +201,13 @@ export function AdminStaffForm({
       }
       if (isValidationError(apiError)) {
         setFieldErrors({
-          name: pickFieldError(apiError.fieldErrors, ["name", "fullName"]),
-          firstName: pickFieldError(apiError.fieldErrors, ["firstName"]),
-          lastName: pickFieldError(apiError.fieldErrors, ["lastName"]),
-          jobTitle: pickFieldError(apiError.fieldErrors, ["jobTitle", "title"]),
+          resourceTypeId: pickFieldError(apiError.fieldErrors, ["resource_type_id", "resourceTypeId"]),
+          firstName: pickFieldError(apiError.fieldErrors, ["first_name", "firstName"]),
+          lastName: pickFieldError(apiError.fieldErrors, ["last_name", "lastName"]),
+          jobTitle: pickFieldError(apiError.fieldErrors, ["job_title", "jobTitle"]),
           specialty: pickFieldError(apiError.fieldErrors, ["specialty"]),
-          phone: pickFieldError(apiError.fieldErrors, ["phone", "mobile"]),
-          email: pickFieldError(apiError.fieldErrors, ["email"]),
-          branchIds: pickFieldError(apiError.fieldErrors, ["branchIds", "branches"]),
-          serviceIds: pickFieldError(apiError.fieldErrors, ["serviceIds", "services"]),
-          publicDescription: pickFieldError(apiError.fieldErrors, ["publicDescription"]),
-          scheduleMode: pickFieldError(apiError.fieldErrors, ["scheduleMode"]),
+          publicDescription: pickFieldError(apiError.fieldErrors, ["description"]),
+          branchIds: pickFieldError(apiError.fieldErrors, ["branch_ids", "branchIds"]),
         });
         setFormError(apiError.fieldErrors ? undefined : apiError.message);
         return;
@@ -239,7 +222,7 @@ export function AdminStaffForm({
   async function onAvatarSelected(file: File | undefined) {
     if (!file || !reference || !canUploadAvatar) return;
     setAvatarError(undefined);
-    if (!file.type.startsWith("image/")) {
+    if (!AVATAR_ACCEPT.split(",").includes(file.type)) {
       setAvatarError("فقط تصویر JPEG، PNG یا WebP مجاز است.");
       return;
     }
@@ -295,11 +278,22 @@ export function AdminStaffForm({
     setLeaveOpen(true);
   }
 
-  if (businessQuery.isError) {
+  if (businessQuery.isError && !isNotFoundError(toAppApiError(businessQuery.error))) {
     return (
       <ApiErrorState
         title="اطلاعات کسب‌وکار دریافت نشد"
         onRetry={() => void businessQuery.refetch()}
+      />
+    );
+  }
+  if (mode === "create" && typesQuery.isError) {
+    const error = toAppApiError(typesQuery.error);
+    return (
+      <ApiErrorState
+        title="انواع کارمند دریافت نشد"
+        description={error.message}
+        requestId={error.requestId}
+        onRetry={() => void typesQuery.refetch()}
       />
     );
   }
@@ -313,7 +307,7 @@ export function AdminStaffForm({
         <Alert
           tone="info"
           title="مرز مفاهیم"
-          description="کارمند ≠ حساب مدیریت. نمایش مشتری و قابلیت رزرو مستقل از هم و از تخصیص خدمت هستند."
+          description="کارمند ≠ حساب مدیریت. ایجاد کارمند حساب ورود به پنل نمی‌سازد."
         />
 
         {canUploadAvatar ? (
@@ -323,8 +317,8 @@ export function AdminStaffForm({
             </h3>
             <div className="admin-staff-avatar-upload">
               <AdminStaffAvatar
-                avatar={{ imageUrl: avatarPreview, initials: form.name.slice(0, 2) }}
-                name={form.name || "?"}
+                avatar={{ imageUrl: avatarPreview, initials: displayName.slice(0, 2) }}
+                name={displayName || "?"}
                 size="lg"
               />
               <div className="admin-staff-avatar-upload__actions">
@@ -361,50 +355,45 @@ export function AdminStaffForm({
             {avatarError ? <p className="ds-error">{avatarError}</p> : null}
             <p className="ds-help">حداکثر ۲ مگابایت — JPEG، PNG یا WebP</p>
           </section>
-        ) : mode === "create" ? (
-          <p className="ds-help">پس از ایجاد کارمند می‌توانید تصویر پروفایل اضافه کنید.</p>
+        ) : null}
+
+        {mode === "create" ? (
+          <FormField id="staffResourceType" label="نوع کارمند" required error={fieldErrors.resourceTypeId}>
+            {typesQuery.isPending ? <InlineLoading label="بارگذاری انواع کارمند" /> : null}
+            <Select
+              id="staffResourceType"
+              value={selectedType?.id}
+              disabled={submitting || typesQuery.isPending}
+              options={typeOptions.map((option) => ({ value: option.id, label: option.label }))}
+              onChange={(value) => setForm((current) => ({ ...current, resourceTypeId: value }))}
+            />
+          </FormField>
         ) : null}
 
         <div className="admin-staff-form__grid">
-          <FormField id="staffFirstName" label="نام" error={fieldErrors.firstName}>
+          <FormField id="staffFirstName" label="نام" required error={fieldErrors.firstName}>
             <Input
               id="staffFirstName"
-              value={form.firstName ?? ""}
+              value={form.firstName}
               disabled={submitting}
+              invalid={Boolean(fieldErrors.firstName)}
               onChange={(event) =>
-                setForm((current) => {
-                  const firstName = event.target.value;
-                  const name = [firstName, current.lastName].filter(Boolean).join(" ");
-                  return { ...current, firstName, name: name || current.name };
-                })
+                setForm((current) => ({ ...current, firstName: event.target.value }))
               }
             />
           </FormField>
-          <FormField id="staffLastName" label="نام خانوادگی" error={fieldErrors.lastName}>
+          <FormField id="staffLastName" label="نام خانوادگی" required error={fieldErrors.lastName}>
             <Input
               id="staffLastName"
-              value={form.lastName ?? ""}
+              value={form.lastName}
               disabled={submitting}
+              invalid={Boolean(fieldErrors.lastName)}
               onChange={(event) =>
-                setForm((current) => {
-                  const lastName = event.target.value;
-                  const name = [current.firstName, lastName].filter(Boolean).join(" ");
-                  return { ...current, lastName, name: name || current.name };
-                })
+                setForm((current) => ({ ...current, lastName: event.target.value }))
               }
             />
           </FormField>
         </div>
-
-        <FormField id="staffName" label="نام نمایشی" required error={fieldErrors.name}>
-          <Input
-            id="staffName"
-            value={form.name}
-            disabled={submitting}
-            invalid={Boolean(fieldErrors.name)}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-          />
-        </FormField>
 
         <div className="admin-staff-form__grid">
           <FormField id="staffJobTitle" label="سمت شغلی" error={fieldErrors.jobTitle}>
@@ -429,11 +418,7 @@ export function AdminStaffForm({
           </FormField>
         </div>
 
-        <FormField
-          id="staffPublicDescription"
-          label="توضیحات برای مشتری"
-          error={fieldErrors.publicDescription}
-        >
+        <FormField id="staffPublicDescription" label="توضیحات" error={fieldErrors.publicDescription}>
           <Textarea
             id="staffPublicDescription"
             rows={3}
@@ -445,139 +430,21 @@ export function AdminStaffForm({
           />
         </FormField>
 
-        {initial?.capabilities.hasPrivateContact !== false ? (
-          <div className="admin-staff-form__grid">
-            <FormField id="staffPhone" label="تلفن (خصوصی)" error={fieldErrors.phone}>
-              <Input
-                id="staffPhone"
-                type="tel"
-                className="ltr-value"
-                dir="ltr"
-                value={form.phone ?? ""}
-                disabled={submitting || initial?.privateContact?.masked === true}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, phone: event.target.value }))
-                }
-              />
-            </FormField>
-            <FormField id="staffEmail" label="ایمیل (خصوصی)" error={fieldErrors.email}>
-              <Input
-                id="staffEmail"
-                type="email"
-                className="ltr-value"
-                dir="ltr"
-                value={form.email ?? ""}
-                disabled={submitting || initial?.privateContact?.masked === true}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, email: event.target.value }))
-                }
-              />
-            </FormField>
-          </div>
-        ) : null}
-        {initial?.privateContact?.masked ? (
-          <p className="ds-help">اطلاعات تماس خصوصی بدون مجوز `admin.staff.view_private_contact` نمایش داده نمی‌شود.</p>
-        ) : null}
-
         {multiBranch ? (
-          <>
-            <FormField id="staffBranches" label="شعب" required error={fieldErrors.branchIds}>
-              {branchesQuery.isPending ? <InlineLoading label="بارگذاری شعب" /> : null}
-              <MultiSelect
-                id="staffBranches"
-                values={form.branchIds}
-                disabled={submitting || branchesQuery.isPending}
-                options={(branchesQuery.data ?? []).map((branch) => ({
-                  value: branch.id,
-                  label: branch.name,
-                }))}
-                onChange={(values) =>
-                  setForm((current) => ({
-                    ...current,
-                    branchIds: values,
-                    primaryBranchId: values.includes(current.primaryBranchId ?? "")
-                      ? current.primaryBranchId
-                      : values[0],
-                  }))
-                }
-              />
-            </FormField>
-            {form.branchIds.length > 1 ? (
-              <FormField id="staffPrimaryBranch" label="شعبه اصلی">
-                <Select
-                  id="staffPrimaryBranch"
-                  value={form.primaryBranchId}
-                  disabled={submitting}
-                  options={form.branchIds.map((id) => {
-                    const branch = (branchesQuery.data ?? []).find((b) => b.id === id);
-                    return { value: id, label: branch?.name ?? id };
-                  })}
-                  onChange={(value) =>
-                    setForm((current) => ({ ...current, primaryBranchId: value }))
-                  }
-                />
-              </FormField>
-            ) : null}
-          </>
-        ) : (
-          <p className="ds-help">شعبه به‌صورت خودکار از پیکربندی تک‌شعبه‌ای کسب‌وکار اعمال می‌شود.</p>
-        )}
-
-        {initial?.capabilities.hasServiceAssignment !== false && serviceOptions.length > 0 ? (
-          <FormField id="staffServices" label="خدمات" error={fieldErrors.serviceIds}>
+          <FormField id="staffBranches" label="شعب" required error={fieldErrors.branchIds}>
+            {branchesQuery.isPending ? <InlineLoading label="بارگذاری شعب" /> : null}
             <MultiSelect
-              id="staffServices"
-              values={form.serviceIds}
-              disabled={submitting}
-              options={serviceOptions}
-              onChange={(values) => setForm((current) => ({ ...current, serviceIds: values }))}
+              id="staffBranches"
+              values={form.branchIds}
+              disabled={submitting || branchesQuery.isPending}
+              options={(branchesQuery.data ?? []).map((branch) => ({
+                value: branch.id,
+                label: branch.name,
+              }))}
+              onChange={(values) => setForm((current) => ({ ...current, branchIds: values }))}
             />
-            <p className="ds-help">
-              تخصیص خدمت به‌تنهایی باعث نمایش عمومی برای مشتری نمی‌شود.
-            </p>
           </FormField>
         ) : null}
-
-        <FormField id="staffScheduleMode" label="حالت زمان‌بندی" error={fieldErrors.scheduleMode}>
-          <Select
-            id="staffScheduleMode"
-            value={form.scheduleMode ?? "inherit_business"}
-            disabled={submitting}
-            options={(["inherit_business", "inherit_branch", "custom"] as AdminStaffScheduleMode[]).map(
-              (modeValue) => ({
-                value: modeValue,
-                label: ADMIN_STAFF_SCHEDULE_MODE_LABELS[modeValue],
-              }),
-            )}
-            onChange={(value) =>
-              setForm((current) => ({
-                ...current,
-                scheduleMode: (value as AdminStaffScheduleMode) ?? "inherit_business",
-              }))
-            }
-          />
-          <p className="ds-help">
-            ویرایش کامل ساعات کاری در فاز ۳۲ انجام می‌شود. اینجا فقط حالت وراثت ثبت می‌شود.
-          </p>
-        </FormField>
-
-        <Switch
-          label="فعال برای رزرو (Bookable)"
-          description="کارمند می‌تواند در نوبت‌ها تخصیص یابد؛ حتی اگر برای مشتری مخفی باشد."
-          checked={form.bookable}
-          disabled={submitting}
-          onCheckedChange={(checked) => setForm((current) => ({ ...current, bookable: checked }))}
-        />
-
-        <Switch
-          label="نمایش برای مشتری (Customer-visible Provider)"
-          description="فقط فیلدهای تأییدشده Backend در UI مشتری نمایش داده می‌شوند."
-          checked={form.customerVisible}
-          disabled={submitting}
-          onCheckedChange={(checked) =>
-            setForm((current) => ({ ...current, customerVisible: checked }))
-          }
-        />
 
         <div className="booking-wizard__nav">
           <Button
@@ -594,7 +461,11 @@ export function AdminStaffForm({
           >
             انصراف
           </Button>
-          <Button type="submit" loading={submitting}>
+          <Button
+            type="submit"
+            loading={submitting}
+            disabled={mode === "create" && typesQuery.isPending}
+          >
             {mode === "create" ? "ایجاد کارمند" : "ذخیره تغییرات"}
           </Button>
         </div>

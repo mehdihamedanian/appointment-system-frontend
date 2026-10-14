@@ -363,6 +363,12 @@
 
 .ds-calendar__grid {
   display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ds-calendar__row {
+  display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-1);
   min-width: 0;

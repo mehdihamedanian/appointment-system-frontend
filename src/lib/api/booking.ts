@@ -1,18 +1,22 @@
 import { apiClient } from "@/lib/api/client";
 import { ApiError, isNotFoundError, toAppApiError } from "@/lib/api/errors";
 import { canQueryAvailability } from "@/lib/availability/context";
+import { calendarMonthBounds, isCalendarMonthKey } from "@/lib/date-time/calendar-adapter";
 import {
-  adaptBookableDates,
-  adaptBookableSlots,
   adaptBookingConfirm,
+  adaptServiceAvailabilityDates,
+  adaptServiceAvailabilitySlots,
   adaptBookingQuote,
   emptyBookingQuote,
+  pricedAtBookingQuote,
 } from "@/lib/booking/adapters";
 import { adaptBookingConfirmation } from "@/lib/booking/confirmation-adapter";
 import { sanitizedAdditionalData } from "@/lib/booking/idempotency";
 import { bookingProviderId } from "@/lib/public/provider-preference";
 import { isSafePublicId } from "@/lib/public/booking-href";
+import { asSafeText, unwrapPayload } from "@/lib/public/read";
 import { queryKeys } from "@/lib/query/keys";
+import { isRecord } from "@/lib/utilities/records";
 import type {
   BookingDraft,
   BookableDatesView,
@@ -39,6 +43,11 @@ const emptySlots = (reason: BookableSlotsView["unavailableReason"]): BookableSlo
   unavailableReason: reason,
 });
 
+/** Availability is `GET /services/{id}/availability`; the Backend requires `branch_id`. */
+function serviceAvailabilityPath(serviceId: string): string {
+  return `/services/${encodeURIComponent(serviceId)}/availability`;
+}
+
 export async function fetchBookableDates(
   input: {
     serviceId: string;
@@ -48,26 +57,24 @@ export async function fetchBookableDates(
   },
   signal?: AbortSignal,
 ): Promise<BookableDatesView> {
-  try {
-    const payload = await apiClient<unknown>("/public/booking/availability/dates", {
-      method: "GET",
-      signal,
-      query: {
-        serviceId: input.serviceId,
-        branchId: input.branchId,
-        providerId: bookingProviderId(input.preference),
-        preference: input.preference.type,
-        month: input.month,
-      },
-    });
-    return adaptBookableDates(payload);
-  } catch (error) {
-    const normalized = toAppApiError(error);
-    if (isNotFoundError(normalized)) {
-      return emptyDates("missing_endpoint");
-    }
-    throw error;
+  if (!input.branchId) {
+    return emptyDates("branch_required");
   }
+  const bounds = calendarMonthBounds(input.month);
+  if (!bounds) {
+    return emptyDates("error");
+  }
+  const payload = await apiClient<unknown>(serviceAvailabilityPath(input.serviceId), {
+    method: "GET",
+    signal,
+    query: {
+      branch_id: input.branchId,
+      from: bounds.from,
+      to: bounds.to,
+      staff_id: bookingProviderId(input.preference),
+    },
+  });
+  return adaptServiceAvailabilityDates(payload);
 }
 
 export async function fetchBookableSlots(
@@ -79,26 +86,19 @@ export async function fetchBookableSlots(
   },
   signal?: AbortSignal,
 ): Promise<BookableSlotsView> {
-  try {
-    const payload = await apiClient<unknown>("/public/booking/availability/slots", {
-      method: "GET",
-      signal,
-      query: {
-        serviceId: input.serviceId,
-        branchId: input.branchId,
-        providerId: bookingProviderId(input.preference),
-        preference: input.preference.type,
-        date: input.date,
-      },
-    });
-    return adaptBookableSlots(payload);
-  } catch (error) {
-    const normalized = toAppApiError(error);
-    if (isNotFoundError(normalized)) {
-      return emptySlots("missing_endpoint");
-    }
-    throw error;
+  if (!input.branchId) {
+    return emptySlots("branch_required");
   }
+  const payload = await apiClient<unknown>(serviceAvailabilityPath(input.serviceId), {
+    method: "GET",
+    signal,
+    query: {
+      branch_id: input.branchId,
+      date: input.date,
+      staff_id: bookingProviderId(input.preference),
+    },
+  });
+  return adaptServiceAvailabilitySlots(payload, input.date);
 }
 
 export function quoteRequestBody(draft: BookingDraft, couponCode?: string) {
@@ -122,13 +122,31 @@ export async function fetchBookingQuote(
   signal?: AbortSignal,
   couponCode?: string,
 ): Promise<BookingQuoteView> {
+  const code = couponCode?.trim();
+  if (!draft.serviceId) {
+    return emptyBookingQuote();
+  }
+  if (!code) {
+    return pricedAtBookingQuote();
+  }
   try {
-    const payload = await apiClient<unknown>("/public/booking/quote", {
+    const payload = await apiClient<unknown>("/coupons/validate", {
       method: "POST",
       signal,
-      body: quoteRequestBody(draft, couponCode),
+      body: {
+        couponCode: code,
+        serviceId: draft.serviceId,
+        holdToken: draft.holdId,
+      },
     });
-    return adaptBookingQuote(payload);
+    const quote = adaptBookingQuote(payload);
+    const root = unwrapPayload(payload);
+    if (!quote.coupon && isRecord(root) && typeof root.valid === "boolean") {
+      quote.coupon = { code, status: root.valid ? "applied" : "invalid" };
+      const message = asSafeText(root.message);
+      if (message) quote.coupon.message = message;
+    }
+    return quote;
   } catch (error) {
     const normalized = toAppApiError(error);
     if (isNotFoundError(normalized)) {
@@ -142,23 +160,8 @@ export async function previewBookingCheckout(
   draft: BookingDraft,
   signal?: AbortSignal,
 ): Promise<{ checkoutPath: CheckoutPath; quote?: BookingQuoteView }> {
-  try {
-    const payload = await apiClient<unknown>("/customer/bookings/preview", {
-      method: "POST",
-      signal,
-      body: {
-        ...quoteRequestBody(draft),
-        quoteId: draft.quoteId,
-      },
-    });
-    const quote = adaptBookingQuote(payload);
-    return { checkoutPath: quote.checkoutPath, quote };
-  } catch (error) {
-    if (error instanceof ApiError && isNotFoundError(error)) {
-      return { checkoutPath: "unknown" };
-    }
-    throw error;
-  }
+  const quote = await fetchBookingQuote(draft, signal);
+  return { checkoutPath: quote.checkoutPath, quote };
 }
 
 export async function confirmBooking(
@@ -273,7 +276,7 @@ export function bookableDatesQueryOptions(
         preference,
         requiresBranch: gates.requiresBranch,
         providerMode: gates.providerMode,
-      }) && /^\d{4}-\d{2}$/.test(month),
+      }) && isCalendarMonthKey(month),
     ...availabilityQueryBase,
   };
 }

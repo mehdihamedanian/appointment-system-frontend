@@ -165,11 +165,18 @@ describe("AdminResourceCreateScreen", () => {
     const user = userEvent.setup();
     mockedClient.mockImplementation(async (path: string) => {
       if (String(path).includes("/public/business")) return { branchesEnabled: false };
+      if (path === "/admin/resources/types") {
+        return [
+          { id: "rt_staff", code: "staff", display_name: "Staff" },
+          { id: "rt_room", code: "room", display_name: "Room" },
+        ];
+      }
       return {};
     });
     renderWithProviders(<AdminResourceCreateScreen />);
     expect(await screen.findByText("منبع جدید")).toBeInTheDocument();
-    expect(screen.getByText(/این فرم فقط منابع عملیاتی داخلی/)).toBeInTheDocument();
+    expect(screen.getByText(/این فرم فقط منابع عملیاتی/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "ایجاد منبع" })).toBeEnabled());
     await user.click(screen.getByLabelText(/نوع منبع/));
     expect(await screen.findByRole("option", { name: "اتاق" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "کارمند" })).not.toBeInTheDocument();

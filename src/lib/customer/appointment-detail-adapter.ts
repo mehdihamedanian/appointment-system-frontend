@@ -1,4 +1,4 @@
-import { formatCurrencyAmount } from "@/lib/date-time/format";
+import { formatCurrencyAmount, formatDecimalAmount } from "@/lib/date-time/format";
 import {
   adaptActions,
   appointmentProviderLabel,
@@ -47,6 +47,8 @@ const INTERNAL_TIMELINE_KINDS = [
   "internal_note",
 ];
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function publicId(value: unknown): string | undefined {
   const raw = readString(value) ?? asSafeText(value);
   if (!raw || !isSafePublicId(raw) || /^\d+$/.test(raw)) {
@@ -74,6 +76,10 @@ function moneyLabel(value: unknown, currency?: string): string | undefined {
     return formatCurrencyAmount(value.amount, readString(value.currency) ?? currency);
   }
   return undefined;
+}
+
+function positiveDecimalLabel(value: unknown, currency?: string): string | undefined {
+  return Number(value) > 0 ? formatDecimalAmount(value, currency) : undefined;
 }
 
 function adaptDetailService(root: Record<string, unknown>): AppointmentDetailServiceSnapshot | undefined {
@@ -107,6 +113,12 @@ function adaptDetailService(root: Record<string, unknown>): AppointmentDetailSer
 }
 
 function adaptDetailProvider(root: Record<string, unknown>): AppointmentProviderSnapshot | undefined {
+  const assigned =
+    Array.isArray(root.staff) && root.staff.length === 1 && isRecord(root.staff[0]) ? root.staff[0] : undefined;
+  if (!isRecord(root.provider) && assigned) {
+    const name = asSafeText(assigned.display_name) ?? asSafeText(assigned.displayName);
+    if (name) return { mode: "assigned", name };
+  }
   const source = isRecord(root.provider) && !isInternalResource(root.provider) ? root.provider : undefined;
   const modeRaw = (
     readString(source?.mode) ??
@@ -175,6 +187,7 @@ function adaptCustomerNote(root: Record<string, unknown>): string | undefined {
   return (
     asSafeText(root.customerNote) ??
     asSafeText(root.customer_note) ??
+    asSafeText(root.customer_notes) ??
     asSafeText(isRecord(root.notes) ? root.notes.customer : undefined)
   );
 }
@@ -212,21 +225,25 @@ function adaptPayment(root: Record<string, unknown>): PaymentSummaryView {
   const payment: PaymentSummaryView = {
     status:
       parseStatusKey(root.paymentStatus) ??
+      parseStatusKey(root.payment_status) ??
       parseStatusKey(paymentRoot?.status) ??
+      parseStatusKey(paymentRoot?.payment_status) ??
       parseStatusKey(pricingRoot.status),
-    totalLabel: moneyLabel(
-      pricingRoot.totalAmount ?? pricingRoot.totalLabel ?? root.totalAmountLabel,
-      currency,
-    ),
-    paidLabel: moneyLabel(pricingRoot.paidAmount ?? pricingRoot.paidLabel ?? root.paidAmountLabel, currency),
+    totalLabel:
+      moneyLabel(pricingRoot.totalAmount ?? pricingRoot.totalLabel ?? root.totalAmountLabel, currency) ??
+      formatDecimalAmount(paymentRoot?.total_amount, currency),
+    paidLabel:
+      moneyLabel(pricingRoot.paidAmount ?? pricingRoot.paidLabel ?? root.paidAmountLabel, currency) ??
+      positiveDecimalLabel(paymentRoot?.successful_paid_amount, currency),
     depositLabel: moneyLabel(
       pricingRoot.depositAmount ?? pricingRoot.depositLabel ?? root.depositAmountLabel,
       currency,
     ),
-    remainingLabel: moneyLabel(
-      pricingRoot.remainingAmount ?? pricingRoot.remainingLabel ?? root.remainingAmountLabel,
-      currency,
-    ),
+    remainingLabel:
+      moneyLabel(
+        pricingRoot.remainingAmount ?? pricingRoot.remainingLabel ?? root.remainingAmountLabel,
+        currency,
+      ) ?? positiveDecimalLabel(paymentRoot?.outstanding_balance, currency),
     methodLabel:
       asSafeText(paymentRoot?.methodLabel) ??
       asSafeText(paymentRoot?.method) ??
@@ -383,11 +400,13 @@ export function adaptCustomerAppointmentDetail(
     publicId(root.publicReference) ??
     publicId(root.reference) ??
     publicId(root.bookingReference) ??
+    publicId(root.booking_reference) ??
     publicId(root.id) ??
     publicId(root.appointmentId);
   const service = adaptDetailService(root);
   const startsAt =
     readString(root.startsAt) ??
+    readString(root.starts_at) ??
     readString(root.startAt) ??
     readString(root.scheduledAt);
   const status = parseStatusKey(root.status) ?? parseStatusKey(root.appointmentStatus);
@@ -400,6 +419,7 @@ export function adaptCustomerAppointmentDetail(
       publicId(root.publicReference) ??
       publicId(root.reference) ??
       publicId(root.bookingReference) ??
+      publicId(root.booking_reference) ??
       id,
     status,
     service,
@@ -407,6 +427,11 @@ export function adaptCustomerAppointmentDetail(
     payment: adaptPayment(root),
     actions: adaptDetailActions(root, now),
   };
+  const bookingReference = publicId(root.booking_reference);
+  const backendId = readString(root.id);
+  if (bookingReference && backendId && UUID_PATTERN.test(backendId)) {
+    view.appointmentId = backendId;
+  }
   const provider = adaptDetailProvider(root);
   if (provider) view.provider = provider;
   const branch = adaptDetailBranch(root);
@@ -414,11 +439,12 @@ export function adaptCustomerAppointmentDetail(
   if (readBoolean(root.singleBranch) === true || readBoolean(root.isSingleBranch) === true) {
     view.singleBranch = true;
   }
-  const endsAt = readString(root.endsAt) ?? readString(root.endAt);
+  const endsAt = readString(root.endsAt) ?? readString(root.ends_at) ?? readString(root.endAt);
   if (endsAt) view.endsAt = endsAt;
   const duration =
     readNumber(root.durationMinutes) ??
     readNumber(root.duration) ??
+    readNumber(root.duration_snapshot) ??
     service.durationMinutes;
   if (typeof duration === "number" && Number.isInteger(duration) && duration > 0) {
     view.durationMinutes = duration;

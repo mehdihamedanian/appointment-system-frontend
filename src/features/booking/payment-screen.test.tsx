@@ -23,7 +23,18 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: vi.fn(),
 }));
 
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ...actual.env, paymentGatewayOrigins: ["https://fake-gateway.test"] } };
+});
+
+vi.mock("@/lib/api/booking", async (importOriginal) => {
+  const { withFixtureQuote } = await import("@/test/quote-fixture");
+  return withFixtureQuote(await importOriginal());
+});
+
 import { apiClient } from "@/lib/api/client";
+import { QUOTE_FIXTURE_PATH } from "@/test/quote-fixture";
 
 const mockedClient = vi.mocked(apiClient);
 
@@ -78,12 +89,12 @@ describe("PaymentScreen", () => {
     window.sessionStorage.clear();
     document.documentElement.dir = "rtl";
     persistDraft();
-    vi.spyOn(paymentNavigation, "assign").mockImplementation(() => undefined);
+    vi.spyOn(paymentNavigation, "assign").mockImplementation(() => undefined).mockClear();
   });
 
   it("renders a single full-payment method from the quote", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return hold;
       throw new ApiError({ status: 404, message: "نیست" });
     });
@@ -95,9 +106,45 @@ describe("PaymentScreen", () => {
     expect(document.documentElement.dir).toBe("rtl");
   });
 
+  it("explains a missing booking instead of loading forever", async () => {
+    window.sessionStorage.clear();
+    renderWithProviders(<PaymentScreen />);
+    expect(await screen.findByText("رزرو در حال انجامی پیدا نشد")).toBeInTheDocument();
+    expect(screen.queryByLabelText("در حال بارگذاری پرداخت")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "نوبت‌های من" })).toHaveAttribute("href", "/appointments");
+    expect(mockedClient).not.toHaveBeenCalledWith("/customer/payments/sessions", expect.anything());
+  });
+
+  it("sends the customer to the gateway when a new intent is processing with a payment URL", async () => {
+    mockedClient.mockImplementation(async (path: string) => {
+      if (path === QUOTE_FIXTURE_PATH) return quote;
+      if (path.startsWith("/customer/bookings/holds/")) return hold;
+      if (path === "/customer/payments/sessions") {
+        return {
+          intent_id: "3c0a7f2e-1d4b-4c8e-9f6a-2b5d7e9c1a3f",
+          intent_status: "processing",
+          payment_status: "unpaid",
+          amount: "250000.00",
+          currency: "IRR",
+          payment_url: "https://fake-gateway.test/pay/ref_1",
+        };
+      }
+      throw new ApiError({ status: 404, message: "نیست" });
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<PaymentScreen />);
+    await screen.findByRole("heading", { name: "پرداخت کامل" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "پرداخت" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "پرداخت" }));
+    await waitFor(() => {
+      expect(paymentNavigation.assign).toHaveBeenCalledWith("https://fake-gateway.test/pay/ref_1");
+    });
+    expect(replace).not.toHaveBeenCalled();
+  });
+
   it("renders deposit remaining amount from backend labels only", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return {
           ...quote,
           paymentMode: "deposit",
@@ -118,7 +165,7 @@ describe("PaymentScreen", () => {
 
   it("renders multiple methods as a radio group", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return {
           ...quote,
           paymentMethods: [
@@ -139,7 +186,7 @@ describe("PaymentScreen", () => {
 
   it("applies a coupon only after backend quote update", async () => {
     mockedClient.mockImplementation(async (path, options) => {
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         if (requestCoupon(options) === "SAVE10") {
           return {
             ...quote,
@@ -163,10 +210,10 @@ describe("PaymentScreen", () => {
 
   it("shows coupon field errors for invalid and expired codes", async () => {
     mockedClient.mockImplementation(async (path, options) => {
-      if (path === "/public/booking/quote" && requestCoupon(options)) {
+      if (path === QUOTE_FIXTURE_PATH && requestCoupon(options)) {
         throw new ApiError({ status: 422, code: "COUPON_EXPIRED", message: "expired" });
       }
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return hold;
       throw new ApiError({ status: 404, message: "نیست" });
     });
@@ -181,7 +228,7 @@ describe("PaymentScreen", () => {
   it("creates a payment session once and uses a safe redirect", async () => {
     let releasePayment: () => void = () => undefined;
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return hold;
       if (path === "/customer/payments/sessions") {
         await new Promise<void>((resolve) => {
@@ -207,7 +254,7 @@ describe("PaymentScreen", () => {
 
   it("does not create a payment after confirmed hold expiry", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return { ...hold, status: "expired" };
       throw new ApiError({ status: 404, message: "نیست" });
     });
@@ -219,7 +266,7 @@ describe("PaymentScreen", () => {
   it("submits pay at location without a gateway redirect", async () => {
     window.sessionStorage.removeItem(HOLD_SESSION_KEY);
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return {
           id: "q1",
           paymentMode: "pay_at_location",
@@ -246,7 +293,7 @@ describe("PaymentScreen", () => {
 
   it("rejects an unsafe gateway URL and does not redirect", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return hold;
       if (path === "/customer/payments/sessions") {
         return { id: "pay_1", status: "redirect_required", redirectUrl: "https://evil.example/phish" };
@@ -262,7 +309,7 @@ describe("PaymentScreen", () => {
 
   it("removes an applied coupon and asks for a new quote", async () => {
     mockedClient.mockImplementation(async (path, options) => {
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         if (requestCoupon(options) === "SAVE10") {
           return {
             ...quote,
@@ -289,7 +336,7 @@ describe("PaymentScreen", () => {
 
   it("revalidates quote and hold on window focus", async () => {
     mockedClient.mockImplementation(async (path: string) => {
-      if (path === "/public/booking/quote") return quote;
+      if (path === QUOTE_FIXTURE_PATH) return quote;
       if (path.startsWith("/customer/bookings/holds/")) return hold;
       throw new ApiError({ status: 404, message: "نیست" });
     });
@@ -324,8 +371,8 @@ describe("PaymentResultScreen", () => {
     expect(await screen.findByRole("heading", { name: "در حال بررسی پرداخت" })).toBeInTheDocument();
     expect(screen.queryByText("پرداخت با موفقیت تأیید شد")).not.toBeInTheDocument();
     expect(mockedClient).toHaveBeenCalledWith(
-      "/customer/payments/pay_1/verify",
-      expect.objectContaining({ method: "POST" }),
+      "/customer/payments/pay_1",
+      expect.objectContaining({ method: "GET" }),
     );
   });
 
@@ -346,6 +393,22 @@ describe("PaymentResultScreen", () => {
       "href",
       "/booking/confirmation/BK22A",
     );
+  });
+
+  it("treats an intent still open at the gateway as pending after the customer returns", async () => {
+    const assign = vi.spyOn(paymentNavigation, "assign").mockImplementation(() => undefined).mockClear();
+    mockedClient.mockResolvedValue({
+      intent_id: "pay_1",
+      intent_status: "processing",
+      payment_status: "unpaid",
+      amount: "150000.00",
+      currency: "IRR",
+      payment_url: "https://fake-gateway.test/pay/pay_1",
+    });
+    renderWithProviders(<PaymentResultScreen />);
+    expect(await screen.findByRole("heading", { name: "در حال بررسی پرداخت" })).toBeInTheDocument();
+    expect(screen.queryByText("پرداخت با موفقیت تأیید شد")).not.toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it("keeps failed, pending and unknown states distinct", async () => {
@@ -386,5 +449,22 @@ describe("PaymentResultScreen", () => {
     });
     await user.click(screen.getByRole("button", { name: "بررسی دوباره وضعیت" }));
     expect(await screen.findByRole("heading", { name: "پرداخت با موفقیت تأیید شد" })).toBeInTheDocument();
+  });
+
+  it("polls a pending result until the backend reports a final status", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockedClient.mockResolvedValue({ id: "pay_1", status: "pending" });
+      renderWithProviders(<PaymentResultScreen />);
+      await screen.findByRole("heading", { name: "در حال بررسی پرداخت" });
+      mockedClient.mockResolvedValue({ id: "pay_1", status: "paid", bookingReference: "BK22A" });
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(await screen.findByRole("heading", { name: "پرداخت با موفقیت تأیید شد" })).toBeInTheDocument();
+      const callsAfterFinal = mockedClient.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(mockedClient.mock.calls.length).toBe(callsAfterFinal);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

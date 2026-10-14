@@ -14,6 +14,7 @@ export default function Error({
       <UnexpectedErrorState
         onRetry={reset}
         detail={error.digest ?? error.message}
+        reference={error.digest}
       />
     </div>
   );

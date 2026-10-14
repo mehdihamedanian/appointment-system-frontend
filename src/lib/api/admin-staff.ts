@@ -91,7 +91,7 @@ export async function createAdminStaff(
       method: "POST",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: sanitizeStaffBody(input),
+      body: sanitizeStaffBody(input, "create"),
     });
     const view = adaptAdminStaffDetail(payload);
     if (!view) {
@@ -126,7 +126,7 @@ export async function updateAdminStaff(
       method: "PATCH",
       signal,
       headers: { "Idempotency-Key": idempotencyKey },
-      body: sanitizeStaffBody(input),
+      body: sanitizeStaffBody(input, "update"),
     },
   );
   const view = adaptAdminStaffDetail(payload);
@@ -266,25 +266,26 @@ export async function submitAdminStaffLifecycleAction(
   return result;
 }
 
-function sanitizeStaffBody(input: AdminStaffFormInput): Record<string, unknown> {
+/** Backend `StaffCreate`/`StaffUpdate` forbid unknown fields; send only what they accept. */
+function sanitizeStaffBody(
+  input: AdminStaffFormInput,
+  mode: "create" | "update",
+): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    name: input.name.trim(),
-    firstName: input.firstName?.trim() || undefined,
-    lastName: input.lastName?.trim() || undefined,
-    jobTitle: input.jobTitle?.trim() || undefined,
-    specialty: input.specialty?.trim() || undefined,
-    publicDescription: input.publicDescription?.trim() || undefined,
-    phone: input.phone?.trim() || undefined,
-    email: input.email?.trim() || undefined,
-    branchIds: input.branchIds.length ? input.branchIds : undefined,
-    primaryBranchId: input.primaryBranchId,
-    serviceIds: input.serviceIds.length ? input.serviceIds : undefined,
-    customerVisible: input.customerVisible,
-    bookable: input.bookable,
-    scheduleMode:
-      input.scheduleMode && input.scheduleMode !== "unknown" ? input.scheduleMode : undefined,
-    version: input.version,
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
   };
+  if (mode === "create") body.resourceTypeId = input.resourceTypeId;
+  const optional: Array<[string, string | undefined]> = [
+    ["jobTitle", input.jobTitle],
+    ["specialty", input.specialty],
+    ["description", input.publicDescription],
+  ];
+  for (const [key, value] of optional) {
+    const trimmed = value?.trim();
+    if (trimmed) body[key] = trimmed;
+  }
+  if (input.branchIds.length) body.branchIds = input.branchIds;
   return body;
 }
 

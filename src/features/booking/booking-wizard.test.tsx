@@ -22,7 +22,13 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: vi.fn(),
 }));
 
+vi.mock("@/lib/api/booking", async (importOriginal) => {
+  const { withFixtureQuote } = await import("@/test/quote-fixture");
+  return withFixtureQuote(await importOriginal());
+});
+
 import { apiClient } from "@/lib/api/client";
+import { QUOTE_FIXTURE_PATH } from "@/test/quote-fixture";
 
 const mockedClient = vi.mocked(apiClient);
 
@@ -48,7 +54,7 @@ describe("BookingWizard", () => {
       if (path === "/public/business") {
         return { name: "مجموعه", bookingEnabled: true };
       }
-      if (path === "/public/services") {
+      if (path === "/services") {
         return { items: [{ id: "svc_1", name: "ویزیت", durationMinutes: 30, priceLabel: "۲۵۰ هزار" }] };
       }
       throw new ApiError({ status: 404, message: "نیست" });
@@ -146,7 +152,7 @@ describe("BookingWizard hold creation", () => {
         expiresAt: "2099-01-01T00:00:00.000Z",
         currentStep: "checkout",
         serviceId: "svc_1",
-        branchId: null,
+        branchId: "br_1",
         providerPreference: { type: "not_applicable" },
         date: "2026-08-22",
         slotId: "slot_1",
@@ -159,16 +165,16 @@ describe("BookingWizard hold creation", () => {
       if (path === "/public/business") {
         return { name: "مجموعه", bookingEnabled: true };
       }
-      if (path === "/public/services") {
+      if (path === "/services") {
         return { items: [{ id: "svc_1", name: "ویزیت", durationMinutes: 30, bookingEnabled: true }] };
       }
-      if (path === "/public/services/svc_1") {
+      if (path === "/services/svc_1") {
         return { id: "svc_1", name: "ویزیت", bookingEnabled: true, additionalFields: [] };
       }
       if (path === "/public/services/svc_1/providers") {
         return { mode: "not_applicable", items: [] };
       }
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return {
           id: "q1",
           paymentMode: "full",
@@ -176,9 +182,6 @@ describe("BookingWizard hold creation", () => {
           payableNowLabel: "۲۵۰٬۰۰۰ تومان",
           finalAmountLabel: "۲۵۰٬۰۰۰ تومان",
         };
-      }
-      if (path === "/customer/bookings/preview") {
-        return { checkoutPath: "pay_full" };
       }
       if (path === "/customer/bookings/holds") {
         return {
@@ -219,17 +222,16 @@ describe("BookingWizard hold creation", () => {
         throw new ApiError({ status: 409, code: "SLOT_TAKEN", message: "taken" });
       }
       if (path === "/public/business") return { name: "مجموعه", bookingEnabled: true };
-      if (path === "/public/services") {
+      if (path === "/services") {
         return { items: [{ id: "svc_1", name: "ویزیت", durationMinutes: 30, bookingEnabled: true }] };
       }
-      if (path === "/public/services/svc_1") {
+      if (path === "/services/svc_1") {
         return { id: "svc_1", name: "ویزیت", bookingEnabled: true, additionalFields: [] };
       }
       if (path === "/public/services/svc_1/providers") return { mode: "not_applicable", items: [] };
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return { id: "q1", paymentMode: "full", checkoutPath: "pay_full", payableNowLabel: "۲۵۰٬۰۰۰ تومان" };
       }
-      if (path === "/customer/bookings/preview") return { checkoutPath: "pay_full" };
       throw new ApiError({ status: 404, message: "نیست" });
     });
     renderWithProviders(<BookingWizard />);
@@ -245,17 +247,16 @@ describe("BookingWizard hold creation", () => {
         throw new ApiError({ status: 409, code: "QUOTE_CHANGED", message: "changed" });
       }
       if (path === "/public/business") return { name: "مجموعه", bookingEnabled: true };
-      if (path === "/public/services") {
+      if (path === "/services") {
         return { items: [{ id: "svc_1", name: "ویزیت", durationMinutes: 30, bookingEnabled: true }] };
       }
-      if (path === "/public/services/svc_1") {
+      if (path === "/services/svc_1") {
         return { id: "svc_1", name: "ویزیت", bookingEnabled: true, additionalFields: [] };
       }
       if (path === "/public/services/svc_1/providers") return { mode: "not_applicable", items: [] };
-      if (path === "/public/booking/quote") {
+      if (path === QUOTE_FIXTURE_PATH) {
         return { id: "q1", paymentMode: "full", checkoutPath: "pay_full", payableNowLabel: "۲۵۰٬۰۰۰ تومان" };
       }
-      if (path === "/customer/bookings/preview") return { checkoutPath: "pay_full" };
       throw new ApiError({ status: 404, message: "نیست" });
     });
     renderWithProviders(<BookingWizard />);

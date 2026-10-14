@@ -88,9 +88,9 @@ export function AdminResourceListCards({ items }: { items: AdminResourceListItem
         <li key={item.id}>
           <article className="admin-resource-card ds-card">
             <div className="admin-resource-card__head">
-              <h3>
+              <h2 className="admin-resource-card__title">
                 <Link href={routes.admin.resourceDetail(item.reference)}>{item.name}</Link>
-              </h3>
+              </h2>
               <LifecycleBadge item={item} />
             </div>
             <p className="text-caption">

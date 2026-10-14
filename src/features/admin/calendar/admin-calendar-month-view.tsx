@@ -3,10 +3,12 @@
 import { densityClass } from "@/lib/admin/calendar-layout";
 import {
   eachIsoDateInclusive,
+  isoDateInTimeZone,
   isoDayOfWeek,
   visibleRangeFor,
 } from "@/lib/admin/calendar-range";
-import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { getCalendarAdapter } from "@/lib/date-time/calendar-adapter";
+import { formatIsoDateLabel, todayIsoInTimeZone } from "@/lib/date-time/format";
 import type { AdminCalendarView } from "@/types/admin-calendar";
 
 const DOW_LABELS = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
@@ -41,14 +43,18 @@ export function AdminCalendarMonthView({
   const countByDate = new Map<string, number>();
   for (const event of view.events) {
     if (event.type !== "appointment") continue;
-    const date = event.startsAt.slice(0, 10);
+    const date = isoDateInTimeZone(event.startsAt, view.timezone);
+    if (!date) continue;
     countByDate.set(date, (countByDate.get(date) ?? 0) + 1);
   }
+  const adapter = getCalendarAdapter();
 
   const headerDays = Array.from({ length: 7 }, (_, i) => DOW_LABELS[(weekStartsOn + i) % 7]!);
 
+  const weeks = Array.from({ length: cells.length / 7 }, (_, week) => cells.slice(week * 7, week * 7 + 7));
+
   return (
-    <div className="admin-calendar-month" data-dnd="disabled">
+    <div className="admin-calendar-month" data-dnd="disabled" role="grid" aria-label="تقویم ماهانه">
       <div className="admin-calendar-month__head" role="row">
         {headerDays.map((label) => (
           <div key={label} className="admin-calendar-month__dow" role="columnheader">
@@ -56,10 +62,12 @@ export function AdminCalendarMonthView({
           </div>
         ))}
       </div>
-      <div className="admin-calendar-month__grid" role="grid" aria-label="تقویم ماهانه">
-        {cells.map((date, index) => {
+      {weeks.map((week, weekIndex) => (
+      <div key={weekIndex} className="admin-calendar-month__grid" role="row">
+        {week.map((date, dayIndex) => {
+          const index = weekIndex * 7 + dayIndex;
           if (!date) {
-            return <div key={`empty-${index}`} className="admin-calendar-month__cell is-empty" />;
+            return <div key={`empty-${index}`} role="gridcell" className="admin-calendar-month__cell is-empty" />;
           }
           const summary = summaryByDate.get(date);
           const closed = closedByDate.get(date) ?? (summary?.closed ? summary : undefined);
@@ -70,14 +78,17 @@ export function AdminCalendarMonthView({
             <button
               key={date}
               type="button"
+              role="gridcell"
               className="admin-calendar-month__cell"
               data-today={isToday ? "true" : undefined}
+              aria-current={isToday ? "date" : undefined}
               data-closed={closed ? "true" : undefined}
               data-density={density}
-              aria-label={`${date}${closed ? "، تعطیل" : ""}، ${count} نوبت`}
+              aria-label={`${formatIsoDateLabel(date) ?? date}${closed ? "، تعطیل" : ""}، ${count} نوبت`}
+              data-date={date}
               onClick={() => onSelectDay(date)}
             >
-              <span className="admin-calendar-month__day ltr-value">{Number(date.slice(8))}</span>
+              <span className="admin-calendar-month__day ltr-value">{adapter.dayOfMonth(date)}</span>
               {closed ? (
                 <span className="admin-calendar-month__closed">تعطیل</span>
               ) : count > 0 ? (
@@ -89,6 +100,7 @@ export function AdminCalendarMonthView({
           );
         })}
       </div>
+      ))}
     </div>
   );
 }

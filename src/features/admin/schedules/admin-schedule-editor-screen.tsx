@@ -245,6 +245,11 @@ function AdminScheduleEditorForm({
 
   const canManageBlocks = canEdit && view.allowedActions.manageBlocks !== false;
 
+  const weeklyReadOnlyReason = view.weeklyReadOnlyReason;
+  const dayRangeOnly = Boolean(weeklyReadOnlyReason);
+  const withTimeZone = (body: Record<string, unknown>) =>
+    dayRangeOnly ? { ...body, timeZone: timezone } : body;
+
   const breadcrumbs = buildScheduleBreadcrumbs(scope, view);
 
   const runImpactAndConfirm = useCallback(
@@ -376,7 +381,7 @@ function AdminScheduleEditorForm({
       setPendingSave(null);
     } catch (error) {
       const appError = toAppApiError(error);
-      if (isConflictError(appError)) {
+      if (isConflictError(appError) && !dayRangeOnly) {
         toast.error("نسخه تغییر کرده — داده تازه بارگذاری شد.");
         await onReload();
       } else {
@@ -460,13 +465,17 @@ function AdminScheduleEditorForm({
 
         <TabPanel value="weekly">
           <div className="admin-schedule-editor">
-            <ScheduleInheritancePanel
-              scope={scope}
-              mode={inheritanceMode}
-              disabled={!canEdit || submitting}
-              onChange={handleInheritanceChange}
-            />
-            {inheritanceMode === "custom" ? (
+            {weeklyReadOnlyReason ? (
+              <Alert tone="info" title="ساعات هفتگی (فقط نمایش)" description={weeklyReadOnlyReason} />
+            ) : (
+              <ScheduleInheritancePanel
+                scope={scope}
+                mode={inheritanceMode}
+                disabled={!canEdit || submitting}
+                onChange={handleInheritanceChange}
+              />
+            )}
+            {weeklyReadOnlyReason ? null : inheritanceMode === "custom" ? (
               <>
                 <ScheduleWeeklyEditor
                   weekly={weeklyDraft}
@@ -510,7 +519,11 @@ function AdminScheduleEditorForm({
             items={view.timeOff}
             disabled={!canManageTimeOff || submitting}
             deletingId={deletingTimeOffId}
-            onCreate={(body) => void runImpactAndConfirm({ kind: "time_off_create", body })}
+            dayRangeOnly={dayRangeOnly}
+            timeZone={timezone}
+            onCreate={(body) =>
+              void runImpactAndConfirm({ kind: "time_off_create", body: withTimeZone(body) })
+            }
             onDelete={(id) => {
               setDeletingTimeOffId(id);
               void runImpactAndConfirm({ kind: "time_off_delete", id });
@@ -524,7 +537,11 @@ function AdminScheduleEditorForm({
             scope={scope}
             disabled={!canManageBlocks || submitting}
             deletingId={deletingBlockId}
-            onCreate={(body) => void runImpactAndConfirm({ kind: "block_create", body })}
+            dayRangeOnly={dayRangeOnly}
+            timeZone={timezone}
+            onCreate={(body) =>
+              void runImpactAndConfirm({ kind: "block_create", body: withTimeZone(body) })
+            }
             onDelete={(id) => {
               setDeletingBlockId(id);
               void runImpactAndConfirm({ kind: "block_delete", id });

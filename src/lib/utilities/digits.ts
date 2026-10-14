@@ -12,6 +12,10 @@ export function normalizeDigits(value: string): string {
   });
 }
 
+export function toPersianDigits(value: string | number): string {
+  return String(value).replace(/\d/g, (digit) => PERSIAN_DIGITS[Number(digit)]);
+}
+
 export function toLatinPhone(value: string): string {
   return normalizeDigits(value).replace(/[^\d+]/g, "");
 }

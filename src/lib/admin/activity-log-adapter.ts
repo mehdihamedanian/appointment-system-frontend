@@ -2,7 +2,7 @@ import {
   adminActivityLogDetailHref,
 } from "@/lib/admin/activity-log-filters";
 import { formatAppointmentParts, formatRelativeTime } from "@/lib/date-time/format";
-import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
+import { asList, asSafeText, readBoolean, readUrl, unwrapPayload } from "@/lib/public/read";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { isRecord, readString } from "@/lib/utilities/records";
 import { routes } from "@/constants/routes";
@@ -666,7 +666,7 @@ export function adaptAdminActivityLogExportJob(
   return {
     jobId: readString(source.jobId) ?? readString(source.id) ?? "",
     status,
-    downloadUrl: readString(source.downloadUrl) ?? readString(source.url) ?? undefined,
+    downloadUrl: readUrl(source.downloadUrl) ?? readUrl(source.url),
     message: asSafeText(source.message) ?? asSafeText(source.error),
   };
 }

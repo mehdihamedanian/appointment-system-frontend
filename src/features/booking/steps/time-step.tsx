@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { SlotPicker } from "@/features/booking/slot-picker";
@@ -13,6 +13,10 @@ import { toAppApiError } from "@/lib/api/errors";
 import { defaultCapabilities, isCapabilityVisible } from "@/config/capabilities";
 import { routes } from "@/constants/routes";
 import { isSafePublicId } from "@/lib/public/booking-href";
+import { markElapsedSlots } from "@/lib/availability/elapsed";
+import { formatIsoDateLabel } from "@/lib/date-time/format";
+import { serverNowMs } from "@/lib/date-time/server-clock";
+import { useServerNow } from "@/lib/date-time/use-server-now";
 import type { ProviderPreference, ProviderSelectionMode } from "@/types/provider";
 
 export function TimeStep({
@@ -68,13 +72,16 @@ export function TimeStep({
   );
   const refreshLock = useRef(false);
   const slots = slotsQuery.data;
+  const now = useServerNow();
+  const visibleSlots = useMemo(() => markElapsedSlots(slots?.slots ?? [], now), [slots?.slots, now]);
+  const anyAvailable = visibleSlots.some((slot) => slot.status === "available");
   const loading = slotsQuery.fetchStatus === "fetching" && !slotsQuery.data;
   const refreshing = slotsQuery.isFetching && Boolean(slotsQuery.data);
   const liveMessage = loading
     ? "در حال بارگذاری ساعت‌ها"
     : refreshing
       ? "ساعت‌ها در حال به‌روزرسانی است"
-      : slots?.available
+      : anyAvailable
         ? "ساعت‌های قابل رزرو به‌روز شد"
         : "برای این تاریخ ساعت خالی اعلام نشده است";
 
@@ -82,11 +89,11 @@ export function TimeStep({
     if (!date || !selectedId || !slots || slotsQuery.isFetching) {
       return;
     }
-    const current = slots.slots.find((slot) => slot.id === selectedId);
+    const current = visibleSlots.find((slot) => slot.id === selectedId);
     if (!current || current.status !== "available") {
       onSelect(null);
     }
-  }, [date, onSelect, selectedId, slots, slotsQuery.isFetching]);
+  }, [date, onSelect, selectedId, slots, slotsQuery.isFetching, visibleSlots]);
 
   if (!date) {
     return (
@@ -104,7 +111,9 @@ export function TimeStep({
     refreshLock.current = true;
     try {
       const result = await slotsQuery.refetch();
-      const next = result.data?.slots.find((slot) => slot.id === selectedId);
+      const next = markElapsedSlots(result.data?.slots ?? [], serverNowMs()).find(
+        (slot) => slot.id === selectedId,
+      );
       if (selectedId && (!next || next.status !== "available")) {
         onSelect(null);
       }
@@ -129,6 +138,24 @@ export function TimeStep({
       <EmptyState
         title="ساعت نوبت هنوز متصل نشده"
         description="شناسه نوبت باید از سرویس نوبت‌دهی بیاید. ساعت‌ها در مرورگر ساخته نمی‌شوند."
+      />
+    );
+  }
+
+  if (slots?.unavailableReason === "branch_required") {
+    return (
+      <EmptyState
+        title="شعبه انتخاب نشده است"
+        description="سرویس نوبت‌دهی ساعت‌های آزاد را فقط برای یک شعبهٔ مشخص اعلام می‌کند."
+      />
+    );
+  }
+
+  if (slots?.unavailableReason === "not_configured") {
+    return (
+      <EmptyState
+        title="برنامهٔ این خدمت کامل نیست"
+        description="تنظیمات زمان‌بندی این خدمت در سرویس نوبت‌دهی معتبر نیست؛ ساعتی برای رزرو اعلام نشده است."
       />
     );
   }
@@ -177,7 +204,7 @@ export function TimeStep({
     </div>
   );
 
-  if (!loading && slots && !slots.available) {
+  if (!loading && slots && !anyAvailable) {
     return (
       <div className="booking-time-step">
         <p className="visually-hidden" aria-live="polite">
@@ -203,11 +230,11 @@ export function TimeStep({
       </p>
       {date ? (
         <p className="text-caption">
-          تاریخ انتخاب‌شده: <span className="ltr-value">{date}</span>
+          تاریخ انتخاب‌شده: <time dateTime={date}>{formatIsoDateLabel(date, { weekday: true }) ?? date}</time>
         </p>
       ) : null}
       <SlotPicker
-        slots={slots?.slots ?? []}
+        slots={visibleSlots}
         selectedId={selectedId}
         onSelect={onSelect}
         timezone={slots?.timezone ?? timezone}

@@ -14,6 +14,7 @@ import {
   resolveCalendarDayState,
 } from "@/lib/availability/days";
 import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { calendarMonthKeyFor, isIsoDateInMonthKey } from "@/lib/date-time/calendar-adapter";
 import { toAppApiError } from "@/lib/api/errors";
 import type { ProviderPreference, ProviderSelectionMode } from "@/types/provider";
 import type { CalendarDayVisualState } from "@/types/availability";
@@ -42,12 +43,15 @@ export function RescheduleDateStep({
   submitted?: boolean;
 }) {
   const todayFallback = todayIsoInTimeZone(timezone);
-  const [month, setMonth] = useState(() => (selected ?? todayFallback).slice(0, 7));
+  const [month, setMonth] = useState(
+    () => calendarMonthKeyFor(selected ?? todayFallback) ?? calendarMonthKeyFor(todayFallback) ?? "",
+  );
   const [syncedSelected, setSyncedSelected] = useState(selected);
   if (selected !== syncedSelected) {
     setSyncedSelected(selected);
-    if (selected) {
-      setMonth(selected.slice(0, 7));
+    const selectedMonth = selected ? calendarMonthKeyFor(selected) : null;
+    if (selectedMonth) {
+      setMonth(selectedMonth);
     }
   }
 
@@ -72,7 +76,12 @@ export function RescheduleDateStep({
     refreshLock.current = true;
     try {
       const result = await datesQuery.refetch();
-      if (selected && result.data && selected.startsWith(month) && !result.data.dates.includes(selected)) {
+      if (
+        selected &&
+        result.data &&
+        isIsoDateInMonthKey(selected, month) &&
+        !result.data.dates.includes(selected)
+      ) {
         onSelect(null);
       }
     } finally {

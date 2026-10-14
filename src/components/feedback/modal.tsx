@@ -25,6 +25,8 @@ export type ModalProps = {
   children?: ReactNode;
   footer?: ReactNode;
   showClose?: boolean;
+  /** Ids of body content that is also part of the dialog description. */
+  describedBy?: string;
 };
 
 export function Modal({
@@ -37,6 +39,7 @@ export function Modal({
   children,
   footer,
   showClose = true,
+  describedBy,
 }: ModalProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -70,7 +73,9 @@ export function Modal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
-          aria-describedby={description ? descriptionId : undefined}
+          aria-describedby={
+            [description ? descriptionId : null, describedBy].filter(Boolean).join(" ") || undefined
+          }
           tabIndex={-1}
         >
           <div className="modal__header">

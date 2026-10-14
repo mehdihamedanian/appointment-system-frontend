@@ -15,6 +15,7 @@ export default function AuthError({
         title="خطا در صفحه احراز هویت"
         onRetry={reset}
         detail={error.digest ?? error.message}
+        reference={error.digest}
       />
     </div>
   );

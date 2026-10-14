@@ -87,6 +87,69 @@ describe("appointment cancellation adapter", () => {
     expect(result?.refund.status).toBe("processing");
   });
 
+  describe("backend contract", () => {
+    /** `GET /appointments/me/{reference}` — `CustomerAppointmentDetail`. */
+    const backendDetail = {
+      id: "f6e9a5a2-85aa-48d2-86bf-6f134a9e31d7",
+      booking_reference: "APT-698A0409",
+      starts_at: "2026-10-15T06:15:00Z",
+      ends_at: "2026-10-15T06:45:00Z",
+      status: "pending",
+      payment_status: "unpaid",
+      service: { id: "3fd22740-b8e6-4813-add2-d9979ffe8ab4", title: "مشاوره آزمون" },
+      branch: { id: "11111111-2222-4333-8444-555555555555", name: "E2E Branch" },
+      staff: [],
+      duration_snapshot: 30,
+      payment: { payment_status: "unpaid", currency: "IRR", total_amount: "150000.00" },
+      actions: { can_cancel: true, can_reschedule: true, can_repeat: false, can_pay: true },
+    };
+
+    it("reads cancel eligibility from the nested actions", () => {
+      const view = adaptCancellationPreview({ success: true, data: backendDetail });
+      expect(view?.canCancel).toBe(true);
+      expect(view?.appointment.publicReference).toBe("APT-698A0409");
+      expect(view?.appointment.serviceName).toBe("مشاوره آزمون");
+      expect(view?.appointment.endsAt).toBe("2026-10-15T06:45:00Z");
+      const blocked = adaptCancellationPreview({
+        ...backendDetail,
+        actions: { ...backendDetail.actions, can_cancel: false },
+      });
+      expect(blocked?.canCancel).toBe(false);
+    });
+
+    it("does not read the appointment status as a refund status", () => {
+      const view = adaptCancellationPreview(backendDetail);
+      expect(view?.refund.status).toBe("none");
+    });
+
+    it("maps the cancel response and its refund calculation", () => {
+      const response = {
+        appointment: { ...backendDetail, status: "cancelled" },
+        cancelled_at: "2026-10-14T08:00:00Z",
+        reason: null,
+        refund: {
+          refund_eligible: true,
+          refund_policy_code: "full_before_deadline",
+          calculation_base: "150000.00",
+          calculated_refund_amount: "150000.00",
+          payment_execution_required: true,
+        },
+      };
+      const result = adaptCancellationResult({ success: true, data: response });
+      expect(result?.appointmentReference).toBe("APT-698A0409");
+      expect(result?.status).toBe("cancelled");
+      expect(result?.cancelledAt).toBe("2026-10-14T08:00:00Z");
+      expect(result?.refund.status).toBe("processing");
+      expect(result?.refund.refundableAmount?.label).toBeTruthy();
+
+      const unpaid = adaptCancellationResult({
+        ...response,
+        refund: { ...response.refund, refund_eligible: false, calculated_refund_amount: "0.00" },
+      });
+      expect(unpaid?.refund.status).toBe("none");
+    });
+  });
+
   it("validates required reason codes and other text", () => {
     const reasons = previewPayload.allowedReasons;
     expect(

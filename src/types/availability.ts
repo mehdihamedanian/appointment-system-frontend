@@ -31,7 +31,7 @@ export type BookableDateDay = {
   status: CalendarDayAvailability;
 };
 
-export type AvailableSlotStatus = "available" | "unavailable" | "held";
+export type AvailableSlotStatus = "available" | "unavailable" | "held" | "past";
 
 export type AvailableSlotView = {
   id: string;

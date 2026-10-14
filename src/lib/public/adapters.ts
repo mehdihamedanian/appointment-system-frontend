@@ -317,7 +317,10 @@ export function adaptPublicServices(payload: unknown, currency?: string): Public
         readString(item.summary) ??
         readString(item.description),
       imageUrl: readUrl(item.imageUrl ?? item.image ?? item.coverImage),
-      durationMinutes: readNumber(item.durationMinutes) ?? readNumber(item.duration),
+      durationMinutes:
+        readNumber(item.durationMinutes) ??
+        readNumber(item.duration_minutes) ??
+        readNumber(item.duration),
       priceLabel: formatPrice(item, currency),
       featured: readBoolean(item.featured) ?? readBoolean(item.isFeatured) ?? false,
     });

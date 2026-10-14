@@ -1,9 +1,9 @@
 :root {
   color-scheme: light;
 
-  --color-primary: #0e9a93;
-  --color-primary-hover: #0b827c;
-  --color-primary-active: #096e69;
+  --color-primary: #0b7c76;
+  --color-primary-hover: #096a65;
+  --color-primary-active: #075955;
   --color-primary-foreground: #ffffff;
   --color-primary-subtle: #e6f6f5;
   --color-primary-muted: #b7e2df;
@@ -20,47 +20,47 @@
 
   --color-text: #17313a;
   --color-text-muted: #5b7178;
-  --color-text-subtle: #83949a;
+  --color-text-subtle: #667378;
   --color-text-inverse: #ffffff;
   --color-text-disabled: #9aabaf;
 
   --color-border: #dce6e8;
   --color-border-strong: #c4d3d6;
-  --color-focus: #0e9a93;
-  --color-focus-ring: rgb(14 154 147 / 28%);
+  --color-focus: #0b7c76;
+  --color-focus-ring: rgb(11 124 118 / 28%);
 
-  --color-success: #1b8a5f;
+  --color-success: #197e57;
   --color-success-subtle: #e7f6ee;
-  --color-warning: #b7791f;
+  --color-warning: #98641a;
   --color-warning-subtle: #fbf3e3;
-  --color-danger: #c44545;
+  --color-danger: #bc4242;
   --color-danger-subtle: #fbeaea;
-  --color-info: #2b7c9a;
+  --color-info: #297693;
   --color-info-subtle: #e7f3f8;
 
   --color-disabled: #cfd8db;
   --color-disabled-foreground: #8a9ba0;
   --color-overlay: rgb(23 49 58 / 42%);
 
-  --color-status-pending: #b7791f;
+  --color-status-pending: #98641a;
   --color-status-pending-subtle: #fbf3e3;
-  --color-status-confirmed: #0e9a93;
+  --color-status-confirmed: #0b7c76;
   --color-status-confirmed-subtle: #e6f6f5;
-  --color-status-checked-in: #2b7c9a;
+  --color-status-checked-in: #297693;
   --color-status-checked-in-subtle: #e7f3f8;
   --color-status-in-progress: #3d6ea8;
   --color-status-in-progress-subtle: #e8f0f8;
-  --color-status-completed: #1b8a5f;
+  --color-status-completed: #197e57;
   --color-status-completed-subtle: #e7f6ee;
-  --color-status-cancelled: #c44545;
+  --color-status-cancelled: #bc4242;
   --color-status-cancelled-subtle: #fbeaea;
   --color-status-no-show: #8a6a2b;
   --color-status-no-show-subtle: #f7f0e2;
-  --color-status-pending-payment: #b7791f;
+  --color-status-pending-payment: #98641a;
   --color-status-pending-payment-subtle: #fbf3e3;
-  --color-status-paid: #1b8a5f;
+  --color-status-paid: #197e57;
   --color-status-paid-subtle: #e7f6ee;
-  --color-status-failed: #c44545;
+  --color-status-failed: #bc4242;
   --color-status-failed-subtle: #fbeaea;
   --color-status-refunded: #5b7178;
   --color-status-refunded-subtle: #eef2f3;

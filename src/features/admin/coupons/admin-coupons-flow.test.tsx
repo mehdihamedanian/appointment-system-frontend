@@ -25,7 +25,13 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: vi.fn(),
 }));
 
+vi.mock("@/lib/api/booking", async (importOriginal) => {
+  const { withFixtureQuote } = await import("@/test/quote-fixture");
+  return withFixtureQuote(await importOriginal());
+});
+
 import { apiClient } from "@/lib/api/client";
+import { QUOTE_FIXTURE_PATH } from "@/test/quote-fixture";
 
 const mockedClient = vi.mocked(apiClient);
 
@@ -62,7 +68,7 @@ function mockPaymentApis(options?: {
     if (url === "/public/business") {
       return mockBusiness(options?.couponsEnabled ?? true);
     }
-    if (url === "/public/booking/quote") {
+    if (url === QUOTE_FIXTURE_PATH) {
       const couponCode =
         init?.body && typeof init.body === "object"
           ? (init.body as { couponCode?: string }).couponCode

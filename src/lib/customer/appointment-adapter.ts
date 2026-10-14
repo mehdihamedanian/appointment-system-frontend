@@ -1,3 +1,4 @@
+import { routes } from "@/constants/routes";
 import { isInternalResource } from "@/lib/public/adapters";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { asList, asSafeText, readBoolean, readNumber, unwrapPayload } from "@/lib/public/read";
@@ -28,7 +29,8 @@ function adaptService(root: Record<string, unknown>): AppointmentServiceSnapshot
   const name =
     asSafeText(source?.name) ??
     asSafeText(source?.title) ??
-    asSafeText(root.serviceName);
+    asSafeText(root.serviceName) ??
+    asSafeText(root.service_name);
   if (!name) {
     return undefined;
   }
@@ -39,7 +41,10 @@ function adaptService(root: Record<string, unknown>): AppointmentServiceSnapshot
 }
 
 function adaptProvider(root: Record<string, unknown>): AppointmentProviderSnapshot | undefined {
-  const source = isRecord(root.provider) && !isInternalResource(root.provider) ? root.provider : undefined;
+  const staffList = Array.isArray(root.staff) ? root.staff.find((item) => isRecord(item)) : undefined;
+  const source =
+    (isRecord(root.provider) && !isInternalResource(root.provider) ? root.provider : undefined) ??
+    (isRecord(staffList) && !isInternalResource(staffList) ? staffList : undefined);
   const modeRaw = (
     readString(source?.mode) ??
     readString(source?.assignment) ??
@@ -101,7 +106,12 @@ export function adaptActions(root: Record<string, unknown>, now: Date): Appointm
   const nested = isRecord(root.actions) ? root.actions : undefined;
   const source: Record<string, unknown> = nested ?? root;
   const hasActions = Boolean(nested);
-  const explicit = hasActions || readBoolean(root.canPay) !== undefined || readBoolean(root.canCancel) !== undefined;
+  const explicit =
+    hasActions ||
+    readBoolean(root.canPay) !== undefined ||
+    readBoolean(root.can_pay) !== undefined ||
+    readBoolean(root.canCancel) !== undefined ||
+    readBoolean(root.can_cancel) !== undefined;
   const payValidUntil = readString(source.payValidUntil) ?? readString(source.validUntil);
   const expired = isTimestampExpired(payValidUntil, now);
   const payHrefRaw =
@@ -109,20 +119,25 @@ export function adaptActions(root: Record<string, unknown>, now: Date): Appointm
     readString(source.paymentHref) ??
     readString(source.continueHref);
   const payHref = expired ? undefined : getSafeCustomerDeepLink(payHrefRaw);
-  const canPay = readActionFlag(source, "canPay") && !expired;
+  const canPay =
+    (readActionFlag(source, "canPay") || readActionFlag(source, "can_pay")) && !expired;
   const actions: AppointmentActionsView = {
     canView: explicit ? readBoolean(source.canView) === true : true,
-    canCancel: readActionFlag(source, "canCancel"),
-    canReschedule: readActionFlag(source, "canReschedule"),
-    canRepeat: readActionFlag(source, "canRepeat"),
+    canCancel: readActionFlag(source, "canCancel") || readActionFlag(source, "can_cancel"),
+    canReschedule:
+      readActionFlag(source, "canReschedule") || readActionFlag(source, "can_reschedule"),
+    canRepeat: readActionFlag(source, "canRepeat") || readActionFlag(source, "can_repeat"),
     canPay,
-    canReview: readActionFlag(source, "canReview"),
+    canReview: readActionFlag(source, "canReview") || readActionFlag(source, "can_review"),
   };
   if (readBoolean(source.processing) === true || readBoolean(source.busy) === true) {
     actions.processing = true;
   }
-  if (canPay) {
-    actions.payHref = payHref ?? "/booking/payment";
+  const reference =
+    publicId(root.booking_reference) ?? publicId(root.bookingReference) ?? publicId(root.publicReference);
+  const fallbackPayHref = reference ? routes.customer.appointmentPayment(reference) : undefined;
+  if (canPay && (payHref ?? fallbackPayHref)) {
+    actions.payHref = payHref ?? fallbackPayHref;
   }
   if (payValidUntil && canPay) actions.payValidUntil = payValidUntil;
   const blocked = asSafeText(source.blockedReason) ?? asSafeText(source.actionReason);
@@ -151,11 +166,13 @@ export function adaptAppointmentListItem(value: unknown, now = new Date()): Appo
     publicId(value.publicReference) ??
     publicId(value.reference) ??
     publicId(value.bookingReference) ??
+    publicId(value.booking_reference) ??
     publicId(value.id) ??
     publicId(value.appointmentId);
   const service = adaptService(value);
   const startsAt =
     readString(value.startsAt) ??
+    readString(value.starts_at) ??
     readString(value.startAt) ??
     readString(value.scheduledAt);
   const status = parseStatusKey(value.status) ?? parseStatusKey(value.appointmentStatus);
@@ -164,7 +181,12 @@ export function adaptAppointmentListItem(value: unknown, now = new Date()): Appo
   }
   const item: AppointmentListItemView = {
     id,
-    publicReference: publicId(value.publicReference) ?? publicId(value.reference) ?? publicId(value.bookingReference) ?? id,
+    publicReference:
+      publicId(value.publicReference) ??
+      publicId(value.reference) ??
+      publicId(value.bookingReference) ??
+      publicId(value.booking_reference) ??
+      id,
     status,
     service,
     startsAt,
@@ -174,7 +196,7 @@ export function adaptAppointmentListItem(value: unknown, now = new Date()): Appo
   if (provider) item.provider = provider;
   const branch = adaptBranch(value);
   if (branch) item.branch = branch;
-  const endsAt = readString(value.endsAt) ?? readString(value.endAt);
+  const endsAt = readString(value.endsAt) ?? readString(value.ends_at) ?? readString(value.endAt);
   if (endsAt) item.endsAt = endsAt;
   const duration = readNumber(value.durationMinutes) ?? readNumber(value.duration);
   if (typeof duration === "number" && Number.isInteger(duration) && duration > 0) {
@@ -184,7 +206,8 @@ export function adaptAppointmentListItem(value: unknown, now = new Date()): Appo
   if (timezone) item.timezone = timezone;
   const paymentStatus =
     parseStatusKey(value.paymentStatus) ??
-    parseStatusKey(isRecord(value.payment) ? value.payment.status : undefined);
+    parseStatusKey(value.payment_status) ??
+    parseStatusKey(isRecord(value.payment) ? value.payment.status ?? value.payment.payment_status : undefined);
   if (paymentStatus) item.paymentStatus = paymentStatus;
   return item;
 }
@@ -223,8 +246,13 @@ export function adaptAppointmentList(
     seen.add(item.id);
     return true;
   });
-  const page = readNumber(source.page) ?? requestedPage;
-  const pageCount = readNumber(source.pageCount) ?? readNumber(source.totalPages);
+  const meta = isRecord(source.meta) ? source.meta : {};
+  const page = readNumber(source.page) ?? readNumber(meta.page) ?? requestedPage;
+  const pageCount =
+    readNumber(source.pageCount) ??
+    readNumber(source.totalPages) ??
+    readNumber(meta.total_pages) ??
+    readNumber(meta.totalPages);
   const nextCursor = publicId(source.nextCursor) ?? publicId(source.cursor);
   const hasMore =
     readBoolean(source.hasMore) === true ||

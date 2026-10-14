@@ -40,7 +40,7 @@ describe("service card", () => {
     renderWithProviders(<ServiceCard service={item()} bookingEnabled />);
     expect(screen.getByRole("heading", { name: "ویزیت عمومی" })).toBeInTheDocument();
     expect(screen.getByText("معاینه اولیه")).toBeInTheDocument();
-    expect(screen.getByText("30 دقیقه")).toBeInTheDocument();
+    expect(screen.getByText("۳۰ دقیقه")).toBeInTheDocument();
     expect(screen.getByText("۲۵۰٬۰۰۰ ریال")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "جزئیات خدمت" })).toHaveAttribute(
       "href",

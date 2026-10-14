@@ -1,3 +1,5 @@
+import { ClientOnly } from "@/components/feedback/client-only";
+import { PageLoading } from "@/components/feedback/loading-states";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { VerifyOtpForm } from "@/features/auth/verify-otp-form";
 
@@ -9,7 +11,9 @@ export default function VerifyOtpPage() {
       title="تأیید شماره موبایل"
       description="کد پیامک‌شده را وارد کنید."
     >
-      <VerifyOtpForm />
+      <ClientOnly fallback={<PageLoading />}>
+        <VerifyOtpForm />
+      </ClientOnly>
     </AuthShell>
   );
 }

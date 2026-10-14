@@ -4,6 +4,14 @@ import {
 } from "@/lib/admin/coupon-filters";
 import { adminCouponFiltersApplied } from "@/lib/admin/coupon-filters";
 import { formatAppointmentParts } from "@/lib/date-time/format";
+import {
+  formatInstantWithOffset,
+  isoDateInZone,
+  parseInstantInZone,
+  resolveTimeZone,
+  zonedParts,
+  zonedWallTimeToInstant,
+} from "@/lib/date-time/zoned";
 import { asList, asSafeText, readBoolean, unwrapPayload } from "@/lib/public/read";
 import { isSafePublicId } from "@/lib/public/booking-href";
 import { isRecord, readString } from "@/lib/utilities/records";
@@ -208,13 +216,17 @@ function adaptFilterOptions(value: unknown): AdminCouponFilterOptions | undefine
   return Object.keys(options).length > 0 ? options : undefined;
 }
 
+/** Business-local wall date/time of a validity instant, for the edit form. */
 function splitDateTime(iso: string | undefined, timeZone?: string): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
-  const parts = formatAppointmentParts(iso, timeZone);
-  if (!parts) return { date: iso.slice(0, 10), time: "00:00" };
-  const date = iso.slice(0, 10);
-  const timeMatch = iso.match(/T(\d{2}:\d{2})/);
-  return { date, time: timeMatch?.[1] ?? "00:00" };
+  const zone = resolveTimeZone(timeZone);
+  const instant = parseInstantInZone(iso, zone);
+  if (!instant) return { date: iso.slice(0, 10), time: "00:00" };
+  const parts = zonedParts(instant, zone);
+  return {
+    date: isoDateInZone(instant, zone),
+    time: `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`,
+  };
 }
 
 export function adaptAdminCouponListItem(value: unknown): AdminCouponListItemView | null {
@@ -441,9 +453,10 @@ export function validateAdminCouponForm(input: AdminCouponFormInput): AdminCoupo
   if (!input.startsAt) errors.startsAt = "تاریخ شروع الزامی است.";
   if (!input.endsAt) errors.endsAt = "تاریخ پایان الزامی است.";
   if (input.startsAt && input.endsAt) {
-    const start = new Date(`${input.startsAt}T${input.startsTime || "00:00"}:00`);
-    const end = new Date(`${input.endsAt}T${input.endsTime || "23:59"}:00`);
-    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end <= start) {
+    const zone = resolveTimeZone(input.timeZone);
+    const start = zonedWallTimeToInstant(input.startsAt, input.startsTime || "00:00", zone);
+    const end = zonedWallTimeToInstant(input.endsAt, input.endsTime || "23:59", zone);
+    if (start && end && end <= start) {
       errors.endsAt = "پایان باید بعد از شروع باشد.";
     }
   }
@@ -455,14 +468,21 @@ export function validateAdminCouponForm(input: AdminCouponFormInput): AdminCoupo
   return errors;
 }
 
+/** Validity is entered as business-local wall time; the Backend requires offset-aware instants. */
+function couponBoundary(date: string, time: string, timeZone: string): string {
+  const instant = zonedWallTimeToInstant(date, time, timeZone);
+  return instant ? formatInstantWithOffset(instant, timeZone) : `${date}T${time}:00`;
+}
+
 export function sanitizeAdminCouponBody(input: AdminCouponFormInput, version?: string) {
+  const zone = resolveTimeZone(input.timeZone);
   const body: Record<string, unknown> = {
     code: input.code.trim(),
     title: input.title.trim(),
     discountType: input.discountType,
     discountValue: input.discountValue.trim(),
-    startsAt: `${input.startsAt}T${input.startsTime || "00:00"}:00`,
-    endsAt: `${input.endsAt}T${input.endsTime || "23:59"}:00`,
+    startsAt: couponBoundary(input.startsAt, input.startsTime || "00:00", zone),
+    endsAt: couponBoundary(input.endsAt, input.endsTime || "23:59", zone),
     serviceScope: input.serviceScope,
     serviceIds: input.serviceScope === "all" ? [] : input.serviceIds,
     branchIds: input.branchIds,

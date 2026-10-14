@@ -7,10 +7,12 @@ export function useIsClient(): boolean {
 }
 
 export const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function getFocusable(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => !element.closest("[hidden], [inert]"),
+  );
 }
 
 export function focusFirst(root: HTMLElement): void {
@@ -29,7 +31,10 @@ export function cycleTab(root: HTMLElement, event: KeyboardEvent): void {
   const last = items[items.length - 1];
   const active = document.activeElement;
 
-  if (event.shiftKey && active === first) {
+  if (!active || !root.contains(active)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && (active === first || active === root)) {
     event.preventDefault();
     last.focus();
   } else if (!event.shiftKey && active === last) {

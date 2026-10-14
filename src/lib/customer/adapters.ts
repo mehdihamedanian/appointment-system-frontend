@@ -41,6 +41,8 @@ function readStatus(value: unknown): StatusKey | undefined {
 
 function readId(source: Record<string, unknown>): string | undefined {
   const id =
+    readString(source.booking_reference) ??
+    readString(source.bookingReference) ??
     readString(source.id) ??
     readString(source.appointmentId) ??
     readString(source.publicId) ??
@@ -80,9 +82,12 @@ export function adaptAppointmentPreview(value: unknown): AppointmentPreview | nu
   const id = readId(value);
   const serviceName =
     readString(value.serviceName) ??
-    (isRecord(value.service) ? readString(value.service.name) : undefined);
+    (isRecord(value.service)
+      ? readString(value.service.name) ?? readString(value.service.title)
+      : undefined);
   const startsAt =
     readString(value.startsAt) ??
+    readString(value.starts_at) ??
     readString(value.startAt) ??
     readString(value.scheduledAt) ??
     readString(value.startTime);
@@ -252,7 +257,10 @@ export function adaptCustomerDashboard(
       : source;
 
   const upcoming = adaptAppointments(
-    source.upcomingAppointments ?? source.upcoming ?? source.appointments,
+    source.upcomingAppointments ??
+      source.upcoming ??
+      source.appointments ??
+      source.items,
   );
   const designated = adaptAppointmentPreview(
     source.nextAppointment ?? source.nearestAppointment,

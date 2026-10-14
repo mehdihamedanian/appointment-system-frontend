@@ -2,7 +2,9 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useId,
   useState,
   type KeyboardEvent,
@@ -14,6 +16,9 @@ type TabsContextValue = {
   value: string;
   setValue: (value: string) => void;
   id: string;
+  /** Values whose TabPanel is mounted; tabs used as plain filters have none. */
+  panels: ReadonlySet<string>;
+  registerPanel: (value: string) => () => void;
 };
 
 const TabsContext = createContext<TabsContextValue | null>(null);
@@ -31,6 +36,7 @@ export function Tabs({
 }) {
   const id = useId();
   const [uncontrolled, setUncontrolled] = useState(defaultValue);
+  const [panels, setPanels] = useState<ReadonlySet<string>>(() => new Set());
   const selected = value ?? uncontrolled;
   const setValue = (next: string) => {
     onValueChange?.(next);
@@ -38,9 +44,18 @@ export function Tabs({
       setUncontrolled(next);
     }
   };
+  const registerPanel = useCallback((panel: string) => {
+    setPanels((current) => new Set(current).add(panel));
+    return () =>
+      setPanels((current) => {
+        const next = new Set(current);
+        next.delete(panel);
+        return next;
+      });
+  }, []);
 
   return (
-    <TabsContext.Provider value={{ value: selected, setValue, id }}>
+    <TabsContext.Provider value={{ value: selected, setValue, id, panels, registerPanel }}>
       <div className="ds-tabs">{children}</div>
     </TabsContext.Provider>
   );
@@ -103,7 +118,7 @@ export function Tab({
       id={`${tabs.id}-${value}`}
       data-value={value}
       aria-selected={selected}
-      aria-controls={`${tabs.id}-panel-${value}`}
+      aria-controls={tabs.panels.has(value) ? `${tabs.id}-panel-${value}` : undefined}
       tabIndex={selected ? 0 : -1}
       disabled={disabled}
       onClick={() => tabs.setValue(value)}
@@ -121,7 +136,10 @@ export function TabPanel({
   children: ReactNode;
 }) {
   const tabs = useTabs();
-  if (tabs.value !== value) {
+  const active = tabs.value === value;
+  const { registerPanel } = tabs;
+  useEffect(() => (active ? registerPanel(value) : undefined), [active, registerPanel, value]);
+  if (!active) {
     return null;
   }
   return (
@@ -130,6 +148,7 @@ export function TabPanel({
       id={`${tabs.id}-panel-${value}`}
       aria-labelledby={`${tabs.id}-${value}`}
       className={cx("ds-tabpanel")}
+      tabIndex={0}
     >
       {children}
     </div>

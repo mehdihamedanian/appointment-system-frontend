@@ -1,4 +1,4 @@
-import { maskPhone } from "@/lib/auth/phone";
+import { maskPhone, toE164IranMobile } from "@/lib/auth/phone";
 import { adaptCustomerItem } from "@/lib/admin/manual-booking-adapter";
 import { adaptPaymentHistoryList } from "@/lib/customer/payment-history-adapter";
 import { adminCustomerDetailHref, adminCustomerEditHref } from "@/lib/admin/customer-filters";
@@ -446,14 +446,16 @@ export function validateAdminCustomerForm(input: AdminCustomerFormInput): AdminC
   return errors;
 }
 
-export function sanitizeAdminCustomerBody(input: AdminCustomerFormInput) {
-  return {
-    firstName: input.firstName.trim(),
-    lastName: input.lastName.trim(),
-    phone: input.phone.trim(),
-    email: input.email?.trim() || undefined,
-    version: input.version,
+/** CustomerCreateInternal; the mobile is fixed after creation and updates send only names and email. */
+export function sanitizeAdminCustomerBody(input: AdminCustomerFormInput, mode: "create" | "update" = "create") {
+  const body: Record<string, string> = {
+    first_name: input.firstName.trim(),
+    last_name: input.lastName.trim(),
   };
+  if (mode === "create") body.mobile = toE164IranMobile(input.phone.trim());
+  const email = input.email?.trim();
+  if (email) body.email = email;
+  return body;
 }
 
 export function formFromAdminCustomerDetail(detail?: AdminCustomerDetailView | null): AdminCustomerFormInput {

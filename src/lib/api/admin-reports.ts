@@ -7,6 +7,7 @@ import {
 } from "@/lib/admin/report-adapter";
 import { filtersToAdminReportParams } from "@/lib/admin/report-filters";
 import { queryKeys } from "@/lib/query/keys";
+import { EXPORT_JOB_POLL, boundedPollInterval } from "@/lib/query/policies";
 import type {
   AdminReportExportView,
   AdminReportListFilters,
@@ -128,11 +129,10 @@ export function adminReportExportQueryOptions(
       fetchAdminReportExport(jobId, reportType, signal),
     enabled: Boolean(userId) && Boolean(jobId) && enabled,
     staleTime: 0,
-    refetchInterval: (query: { state: { data?: AdminReportExportView } }) => {
-      const status = query.state.data?.status;
-      if (status === "pending" || status === "processing") return 2000;
-      return false;
-    },
+    refetchInterval: boundedPollInterval<AdminReportExportView>(
+      (data) => data.status === "pending" || data.status === "processing",
+      EXPORT_JOB_POLL,
+    ),
     retry: false,
   };
 }

@@ -1,3 +1,4 @@
+import { parseInstantInZone, resolveTimeZone, zonedParts } from "@/lib/date-time/zoned";
 import type { AvailableSlotView, SlotPeriod, SlotPeriodGroup } from "@/types/availability";
 
 /** Presentation-only hour boundaries in the business timezone. Do not generate slots. */
@@ -8,22 +9,10 @@ export const SLOT_PERIOD_BOUNDARIES = {
 } as const;
 
 export function hourInTimeZone(value: string, timeZone?: string): number | null {
-  if (/^\d{4}-\d{2}-\d{2}T/.test(value) || value.includes("Z")) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    try {
-      const hour = new Intl.DateTimeFormat("en-GB", {
-        timeZone: timeZone || undefined,
-        hour: "2-digit",
-        hourCycle: "h23",
-      }).format(date);
-      const parsed = Number.parseInt(hour, 10);
-      return Number.isFinite(parsed) ? parsed : null;
-    } catch {
-      return date.getHours();
-    }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const zone = resolveTimeZone(timeZone);
+    const date = parseInstantInZone(value, zone);
+    return date ? zonedParts(date, zone).hour : null;
   }
 
   const match = value.match(/(?:^|[^\d])(\d{1,2}):(\d{2})/);

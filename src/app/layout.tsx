@@ -7,7 +7,7 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 const vazirmatn = Vazirmatn({
-  subsets: ["arabic", "latin"],
+  subsets: ["arabic"],
   weight: ["400", "500", "600", "700"],
   display: "swap",
   variable: "--font-vazirmatn",

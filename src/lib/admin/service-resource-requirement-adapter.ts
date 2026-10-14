@@ -74,10 +74,13 @@ function adaptResourceOption(value: unknown): AdminServiceResourceRequirementRes
   const id = publicId(value.id) ?? publicId(value.resourceId);
   const name = asSafeText(value.name) ?? asSafeText(value.label);
   if (!id || !name) return null;
-  const type = adaptAdminResourceType(value.type ?? value.kind ?? value.resourceType);
+  const type = adaptAdminResourceType(
+    value.resource_type_code ?? value.type ?? value.kind ?? value.resourceType,
+  );
   const lifecycle = readString(value.lifecycle ?? value.status)?.toLowerCase();
   const active =
     readBoolean(value.active) !== false &&
+    readBoolean(value.is_active) !== false &&
     lifecycle !== "inactive" &&
     lifecycle !== "archived" &&
     readBoolean(value.inactive) !== true;
@@ -181,8 +184,68 @@ export function detectDuplicateTypeWarnings(
   return warnings;
 }
 
+/** Name placeholder for a pinned resource: the Backend returns only `specific_resource_id`. */
+export const PINNED_RESOURCE_PLACEHOLDER = "منبع انتخاب‌شده";
+
+/**
+ * Backend `ServiceResourceRequirementRead`: one pinned resource is `specific_resource_id`,
+ * several are `alternatives` (any one of them is allocated). The two never coexist.
+ */
+function adaptBackendRequirementItem(
+  value: Record<string, unknown>,
+  index: number,
+): AdminServiceResourceRequirementItem {
+  const code = readString(value.resource_type_code)?.toLowerCase();
+  const resourceType = adaptAdminResourceType(code);
+  const alternatives = asList(value.alternatives, [])
+    .map((entry): AdminServiceResourceRequirementResource | null => {
+      if (!isRecord(entry)) return null;
+      const id = publicId(entry.resource_id);
+      const name = asSafeText(entry.resource_name);
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        type: adaptAdminResourceType(entry.resource_type_code),
+        active: readBoolean(entry.is_active) !== false,
+      };
+    })
+    .filter((item): item is AdminServiceResourceRequirementResource => Boolean(item));
+  const pinnedId = publicId(value.specific_resource_id);
+  const selectedResources: AdminServiceResourceRequirementResource[] = alternatives.length
+    ? alternatives
+    : pinnedId
+      ? [{ id: pinnedId, name: PINNED_RESOURCE_PLACEHOLDER, type: resourceType, active: true }]
+      : [];
+
+  const item: AdminServiceResourceRequirementItem = {
+    key: readString(value.id) ?? `draft_${index}`,
+    reference: readString(value.id),
+    resourceType,
+    resourceTypeId: publicId(value.resource_type_id),
+    resourceTypeLabel:
+      resourceType !== "unknown"
+        ? ADMIN_RESOURCE_TYPE_LABELS[resourceType]
+        : asSafeText(value.resource_type_display_name) ?? code ?? ADMIN_RESOURCE_TYPE_LABELS.unknown,
+    assignmentMode: readString(value.assignment_mode) === "manual" ? "manual" : "automatic",
+    label: asSafeText(value.label),
+    quantity: readNumber(value.quantity) ?? 1,
+    quantityMin: 1,
+    necessity: readBoolean(value.is_required) === false ? "optional" : "required",
+    selectionMode: selectedResources.length ? "specific" : "any_of_type",
+    specificSemantics: alternatives.length > 1 ? "any_one" : "unknown",
+    selectedResources,
+    branchScope: "global",
+    sortOrder: readNumber(value.sort_order),
+    inactiveSelection: selectedResources.some((r) => !r.active),
+  };
+  item.summaryLine = buildRequirementSummaryLine(item);
+  return item;
+}
+
 function adaptRequirementItem(value: unknown, index: number): AdminServiceResourceRequirementItem | null {
   if (!isRecord(value)) return null;
+  if ("resource_type_id" in value) return adaptBackendRequirementItem(value, index);
   const resourceType = adaptAdminResourceType(value.resourceType ?? value.type ?? value.kind);
   const quantity = readNumber(value.quantity) ?? 1;
   const necessity = adaptNecessity(value.necessity ?? value.required);
@@ -242,25 +305,37 @@ export function adaptAdminServiceResourceRequirements(
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   const capsSource = isRecord(root.capabilities) ? root.capabilities : root;
+  // Backend `ServiceResourceRequirementsListResponse`: a full-replace PUT ordered by
+  // `sort_order`, with no branch scope, staff role, provider flag or version.
+  const backendShape = "service_id" in root;
   const view: AdminServiceResourceRequirementsView = {
     serviceReference:
       readString(root.serviceReference) ?? readString(root.reference) ?? serviceReference,
     serviceName: asSafeText(root.serviceName) ?? asSafeText(root.name),
-    serviceId: publicId(root.serviceId) ?? publicId(root.id),
+    serviceId: publicId(root.service_id) ?? publicId(root.serviceId) ?? publicId(root.id),
     requirements,
     summaryLines: buildRequirementsSummary(requirements),
     duplicateTypeWarnings: detectDuplicateTypeWarnings(requirements),
     version: readString(root.version) ?? readString(root.etag),
     updatedAt: readString(root.updatedAt),
     emptyMapping: requirements.length === 0,
-    capabilities: {
-      canEdit: readBoolean(capsSource.canEdit) !== false,
-      canReorder: readBoolean(capsSource.canReorder) === true,
-      hasBranchScope: readBoolean(capsSource.hasBranchScope) === true,
-      hasStaffRole: readBoolean(capsSource.hasStaffRole) !== false,
-      hasProviderSelectable: readBoolean(capsSource.hasProviderSelectable) !== false,
-      atomicSave: readBoolean(capsSource.atomicSave) !== false,
-    },
+    capabilities: backendShape
+      ? {
+          canEdit: true,
+          canReorder: true,
+          hasBranchScope: false,
+          hasStaffRole: false,
+          hasProviderSelectable: false,
+          atomicSave: true,
+        }
+      : {
+          canEdit: readBoolean(capsSource.canEdit) !== false,
+          canReorder: readBoolean(capsSource.canReorder) === true,
+          hasBranchScope: readBoolean(capsSource.hasBranchScope) === true,
+          hasStaffRole: readBoolean(capsSource.hasStaffRole) !== false,
+          hasProviderSelectable: readBoolean(capsSource.hasProviderSelectable) !== false,
+          atomicSave: readBoolean(capsSource.atomicSave) !== false,
+        },
   };
   return view;
 }
@@ -318,7 +393,8 @@ export function adaptServiceResourceRequirementsSaveResult(
 ): AdminServiceResourceRequirementsSaveResult | null {
   const root = unwrapPayload(payload);
   if (!isRecord(root)) return null;
-  const serviceReference = readString(root.serviceReference) ?? readString(root.reference);
+  const serviceReference =
+    readString(root.serviceReference) ?? readString(root.reference) ?? readString(root.service_id);
   if (!serviceReference) return null;
   const partialFailures = asList(root.partialFailures ?? root.errors, ["items"])
     .map((item) => {
@@ -342,6 +418,9 @@ export function draftsFromView(view: AdminServiceResourceRequirementsView): Admi
     key: item.key,
     reference: item.reference,
     resourceType: item.resourceType,
+    resourceTypeId: item.resourceTypeId,
+    assignmentMode: item.assignmentMode,
+    label: item.label,
     quantity: item.quantity,
     necessity: item.necessity,
     selectionMode: item.selectionMode === "unknown" ? "any_of_type" : item.selectionMode,
@@ -370,28 +449,27 @@ export function inputFromDrafts(
   };
 }
 
+/**
+ * Backend `ServiceResourceRequirementsReplace` (strict schema). One selected resource is pinned
+ * with `specific_resource_id`; several become `alternative_resource_ids`.
+ */
 export function sanitizeRequirementsPayload(
   input: AdminServiceResourceRequirementsInput,
 ): Record<string, unknown> {
   return {
-    version: input.version,
-    requirements: input.requirements.map((req) => ({
-      reference: req.reference,
-      resourceType: req.resourceType === "unknown" ? undefined : req.resourceType,
-      quantity: req.quantity,
-      necessity: req.necessity,
-      selectionMode: req.selectionMode === "unknown" ? undefined : req.selectionMode,
-      resourceIds:
-        req.selectionMode === "specific" && req.selectedResourceIds.length
-          ? req.selectedResourceIds
-          : undefined,
-      branchScope: req.branchScope === "unknown" ? undefined : req.branchScope,
-      branchId: req.branchScope === "branch" ? req.branchId : undefined,
-      staffRole: req.resourceType === "staff" ? req.staffRole : undefined,
-      providerSelectable:
-        req.resourceType === "staff" && req.providerSelectable ? true : undefined,
-      sortOrder: req.sortOrder,
-    })),
+    requirements: input.requirements.map((req, index) => {
+      const selected = req.selectionMode === "specific" ? req.selectedResourceIds : [];
+      return {
+        resource_type_id: req.resourceTypeId,
+        specific_resource_id: selected.length === 1 ? selected[0] : null,
+        alternative_resource_ids: selected.length > 1 ? selected : [],
+        quantity: req.quantity,
+        is_required: req.necessity !== "optional",
+        assignment_mode: req.assignmentMode ?? "automatic",
+        label: req.label ?? null,
+        sort_order: req.sortOrder ?? index + 1,
+      };
+    }),
   };
 }
 
@@ -413,7 +491,7 @@ export function validateRequirementDraft(
   options: { minQuantity?: number; maxQuantity?: number; hasBranchScope?: boolean },
 ): RequirementRowErrors {
   const errors: RequirementRowErrors = {};
-  if (!draft.resourceType || draft.resourceType === "unknown") {
+  if (!draft.resourceTypeId) {
     errors.resourceType = "نوع منبع را انتخاب کنید.";
   }
   if (!Number.isInteger(draft.quantity) || draft.quantity < (options.minQuantity ?? 1)) {

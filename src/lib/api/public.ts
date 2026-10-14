@@ -56,8 +56,19 @@ export async function fetchPublicBusiness(signal?: AbortSignal): Promise<PublicB
 
 export const getPublicBusiness = cache(async () => fetchPublicBusiness());
 
+/**
+ * The Backend catalog is `GET /services` (requires `services.read`, so anonymous
+ * visitors receive 401). Only active services are listed; 100 is the Backend's
+ * maximum page size.
+ */
+const SERVICE_CATALOG_QUERY = { status: "active", page: 1, page_size: 100 } as const;
+
+function serviceDetailPath(serviceId: string): string {
+  return `/services/${encodeURIComponent(serviceId)}`;
+}
+
 const getPublicServicesPayload = cache(async () => {
-  return apiClient<unknown>("/public/services", { method: "GET" });
+  return apiClient<unknown>("/services", { method: "GET", query: SERVICE_CATALOG_QUERY });
 });
 
 export const getPublicServices = cache(async (currency?: string): Promise<PublicService[]> => {
@@ -70,12 +81,12 @@ export async function fetchPublicServiceCatalog(
   filters: ServiceFilters = {},
   signal?: AbortSignal,
 ): Promise<ServiceCatalogView> {
-  const payload = await apiClient<unknown>("/public/services", {
+  const payload = await apiClient<unknown>("/services", {
     method: "GET",
     signal,
     query: {
-      q: filters.q,
-      category: filters.category,
+      ...SERVICE_CATALOG_QUERY,
+      search: filters.q,
     },
   });
   return adaptServiceCatalog(payload, currency);
@@ -105,10 +116,7 @@ export async function fetchPublicServiceDetail(
   currency?: string,
   signal?: AbortSignal,
 ): Promise<ServiceDetailView> {
-  const payload = await apiClient<unknown>(
-    `/public/services/${encodeURIComponent(serviceId)}`,
-    { method: "GET", signal },
-  );
+  const payload = await apiClient<unknown>(serviceDetailPath(serviceId), { method: "GET", signal });
   const detail = adaptServiceDetail(payload, currency);
   if (!detail) {
     throw new ApiError({
@@ -169,10 +177,7 @@ export const loadServiceDetailPage = cache(async (
   serviceId: string,
   options: { currency?: string; loadProviders: boolean; loadBranches: boolean },
 ): Promise<ServiceDetailPageData> => {
-  const payload = await apiClient<unknown>(
-    `/public/services/${encodeURIComponent(serviceId)}`,
-    { method: "GET" },
-  );
+  const payload = await apiClient<unknown>(serviceDetailPath(serviceId), { method: "GET" });
   const service = adaptServiceDetail(payload, options.currency);
   if (!service) {
     throw new ApiError({
@@ -246,9 +251,14 @@ export async function loadPublicHome() {
   const businessResult = await loadPublicBusiness();
   if (!businessResult.ok) {
     if (isPublicApiDisconnected(businessResult.error)) {
+      // The catalog has its own Backend endpoint, so a failure there must not read as "no services".
+      const services =
+        businessResult.error.code === "MISSING_API_BASE_URL"
+          ? { ok: true as const, data: [] as PublicService[] }
+          : await load(() => getPublicServices());
       return {
         business: { ok: true as const, data: configuredPublicBusiness() },
-        services: { ok: true as const, data: [] as PublicService[] },
+        services,
         providers: { ok: true as const, data: [] as PublicProvider[] },
         branches: { ok: true as const, data: [] as PublicBranch[] },
       };

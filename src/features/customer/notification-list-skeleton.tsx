@@ -4,7 +4,7 @@ export function NotificationListSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div
       className="notification-list"
-      aria-busy="true"
+      role="status" aria-busy="true"
       aria-label="در حال بارگذاری اعلان‌ها"
     >
       {Array.from({ length: count }, (_, index) => (

@@ -93,7 +93,7 @@ export type BookableDatesView = {
   minDate?: string;
   maxDate?: string;
   serverNow?: string;
-  unavailableReason?: "missing_endpoint" | "error" | "empty";
+  unavailableReason?: "missing_endpoint" | "branch_required" | "not_configured" | "error" | "empty";
 };
 
 export type BookableSlotView = AvailableSlotView;
@@ -102,7 +102,13 @@ export type BookableSlotsView = {
   available: boolean;
   slots: AvailableSlotView[];
   timezone?: string;
-  unavailableReason?: "missing_endpoint" | "error" | "empty" | "taken";
+  unavailableReason?:
+    | "missing_endpoint"
+    | "branch_required"
+    | "not_configured"
+    | "error"
+    | "empty"
+    | "taken";
   /** Explicit Backend flag — never inferred from empty slots alone. */
   waitingListJoinAllowed?: boolean;
 };
@@ -187,6 +193,11 @@ export type BookingQuoteView = {
   changed: boolean;
   policyChanged: boolean;
   authoritative: boolean;
+  /**
+   * The Backend has no quote API: it prices the appointment when `POST /appointments/me`
+   * creates it and exposes payment through the appointment's own `actions.can_pay`.
+   */
+  pricedAtBooking?: boolean;
 };
 
 export type BookingConfirmView = {

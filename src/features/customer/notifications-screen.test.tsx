@@ -65,9 +65,9 @@ describe("CustomerNotificationBell", () => {
   it("shows unread badge with accessible label", async () => {
     mockedClient.mockImplementation(async (path) => {
       if (String(path).includes("unread-count")) {
-        return { unreadCount: 2 };
+        return { success: true, data: { unread_count: 2 } };
       }
-      if (String(path).includes("recent")) {
+      if (String(path) === "/notifications/in-app") {
         return { items: [notification("n1"), notification("n2", { read: true })] };
       }
       return {};
@@ -82,7 +82,7 @@ describe("CustomerNotificationBell", () => {
       if (String(path).includes("unread-count")) {
         return { unreadCount: 1 };
       }
-      if (String(path).includes("recent")) {
+      if (String(path) === "/notifications/in-app") {
         throw new ApiError({ status: 500, code: "SERVER", message: "fail" });
       }
       return {};
@@ -110,6 +110,26 @@ describe("NotificationsScreen", () => {
     });
     expect(mockedClient).not.toHaveBeenCalled();
     expect(screen.getByLabelText("در حال بارگذاری اعلان‌ها")).toBeInTheDocument();
+  });
+
+  it("requests the Backend inbox with offset pagination and the unread filter", async () => {
+    search.current = new URLSearchParams("read=unread");
+    mockedClient.mockResolvedValue({
+      success: true,
+      data: {
+        items: Array.from({ length: 21 }, (_, index) =>
+          notification(`n${index + 1}`, { created_at: "2026-08-22T10:00:00Z" }),
+        ),
+        unread_count: 21,
+      },
+    });
+    renderWithProviders(<NotificationsScreen />);
+    expect(await screen.findByText("عنوان n1")).toBeInTheDocument();
+    expect(screen.queryByText("عنوان n21")).not.toBeInTheDocument();
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/notifications/in-app",
+      expect.objectContaining({ query: { limit: 21, offset: 0, unread_only: true } }),
+    );
   });
 
   it("renders unread and read notifications with deep link", async () => {
@@ -158,7 +178,7 @@ describe("NotificationsScreen", () => {
       defaultOptions: { queries: { retry: false } },
     });
     mockedClient.mockImplementation(async (path, options) => {
-      if (String(path) === "/customer/notifications/n1/read" && options?.method === "POST") {
+      if (String(path) === "/notifications/in-app/n1/read" && options?.method === "POST") {
         return { ...notification("n1"), read: true };
       }
       return {
@@ -172,7 +192,7 @@ describe("NotificationsScreen", () => {
     await user.click(screen.getByRole("button", { name: "علامت به‌عنوان خوانده‌شده" }));
     await waitFor(() => {
       expect(mockedClient).toHaveBeenCalledWith(
-        "/customer/notifications/n1/read",
+        "/notifications/in-app/n1/read",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -184,8 +204,8 @@ describe("NotificationsScreen", () => {
 
   it("marks all notifications as read after confirmation", async () => {
     mockedClient.mockImplementation(async (path, options) => {
-      if (String(path) === "/customer/notifications/read-all" && options?.method === "POST") {
-        return { unreadCount: 0 };
+      if (String(path) === "/notifications/in-app/read-all" && options?.method === "POST") {
+        return { success: true, data: { unread_count: 0 } };
       }
       return {
         items: [notification("n1"), notification("n2")],
@@ -201,7 +221,7 @@ describe("NotificationsScreen", () => {
     await user.click(confirmButtons[confirmButtons.length - 1]!);
     await waitFor(() => {
       expect(mockedClient).toHaveBeenCalledWith(
-        "/customer/notifications/read-all",
+        "/notifications/in-app/read-all",
         expect.objectContaining({ method: "POST" }),
       );
     });
@@ -214,24 +234,43 @@ describe("NotificationDetailScreen", () => {
     params.current = { notificationId: "n1" };
   });
 
-  it("renders detail and mark-as-read", async () => {
+  it("resolves detail from the Backend inbox and marks it as read", async () => {
     mockedClient.mockImplementation(async (path) => {
       if (String(path).includes("/read")) {
         return { ...notification("n1"), read: true };
       }
-      return notification("n1", { detailMessage: "توضیح کامل" });
+      return {
+        success: true,
+        data: {
+          items: [
+            notification("n2"),
+            notification("n1", { detailMessage: "توضیح کامل" }),
+          ],
+          unread_count: 2,
+        },
+      };
     });
     const user = userEvent.setup();
     renderWithProviders(<NotificationDetailScreen />);
     expect(await screen.findByText("عنوان n1")).toBeInTheDocument();
     expect(screen.getByText("توضیح کامل")).toBeInTheDocument();
+    expect(mockedClient).toHaveBeenCalledWith(
+      "/notifications/in-app",
+      expect.objectContaining({ query: { limit: 100 } }),
+    );
     await user.click(screen.getByRole("button", { name: "علامت به‌عنوان خوانده‌شده" }));
     await waitFor(() => {
       expect(mockedClient).toHaveBeenCalledWith(
-        "/customer/notifications/n1/read",
+        "/notifications/in-app/n1/read",
         expect.objectContaining({ method: "POST" }),
       );
     });
+  });
+
+  it("reports a notification missing from the inbox as not found", async () => {
+    mockedClient.mockResolvedValue({ success: true, data: { items: [], unread_count: 0 } });
+    renderWithProviders(<NotificationDetailScreen />);
+    expect(await screen.findByText("اعلان در دسترس نیست")).toBeInTheDocument();
   });
 
   it("hides existence on forbidden access", async () => {

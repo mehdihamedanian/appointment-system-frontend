@@ -7,6 +7,18 @@ import {
   sanitizeWeeklyBody,
 } from "@/lib/admin/schedule-adapter";
 import { adminScheduleApiPath } from "@/lib/admin/schedule-filters";
+import {
+  adaptTargetBlock,
+  adaptTargetTimeOff,
+  composeTargetSchedulePayload,
+  dayRangeToInstants,
+  isScheduleTargetScope,
+  scheduleTargetBasePath,
+  scheduleTargetBranches,
+  targetScheduleWindow,
+} from "@/lib/admin/schedule-target-backend";
+import { todayIsoInTimeZone } from "@/lib/date-time/format";
+import { unwrapPayload } from "@/lib/public/read";
 import { queryKeys } from "@/lib/query/keys";
 import type {
   AdminScheduleBlockItem,
@@ -34,14 +46,69 @@ function schedulePath(scope: AdminScheduleScope, reference?: string): string {
   return adminScheduleApiPath(scope, reference);
 }
 
+function targetOf(scope: AdminScheduleScope, reference: string | undefined) {
+  return isScheduleTargetScope(scope) && reference
+    ? { scope, reference, base: scheduleTargetBasePath(scope, reference) }
+    : null;
+}
+
+function invalidRange(message: string): ApiError {
+  return new ApiError({ status: 422, code: "VALIDATION_ERROR", message });
+}
+
+/** Date-only panel input → Backend instants in the Backend's schedule timezone. */
+function targetRangeBody(body: Record<string, unknown>): { starts_at: string; ends_at: string } {
+  const timeZone = typeof body.timeZone === "string" ? body.timeZone : "";
+  if (!timeZone) throw invalidRange("منطقهٔ زمانی برنامه مشخص نیست؛ صفحه را دوباره بارگذاری کنید.");
+  const range = dayRangeToInstants(String(body.startsAt ?? ""), String(body.endsAt ?? ""), timeZone);
+  if (!range) throw invalidRange("بازهٔ تاریخ معتبر نیست؛ تاریخ پایان نباید پیش از شروع باشد.");
+  return { starts_at: range.startsAt, ends_at: range.endsAt };
+}
+
+async function fetchTargetSchedule(
+  target: NonNullable<ReturnType<typeof targetOf>>,
+  signal?: AbortSignal,
+): Promise<AdminScheduleView | null> {
+  const window = targetScheduleWindow(todayIsoInTimeZone());
+  const get = (path: string, query?: Record<string, string>) =>
+    apiClient<unknown>(path, { method: "GET", signal, query });
+  const [targetPayload, workingHours, timeOff, blocks] = await Promise.all([
+    get(target.base),
+    get(`${target.base}/working-hours`),
+    get(`${target.base}/time-off`),
+    get(`${target.base}/blocked-times`, { active_only: "true" }),
+  ]);
+  const effective = await Promise.all(
+    scheduleTargetBranches(targetPayload).map(async (branch) => ({
+      branchName: branch.name,
+      payload: await get(`${target.base}/schedule`, { ...window, branch_id: branch.id }),
+    })),
+  );
+  const payload = composeTargetSchedulePayload({
+    scope: target.scope,
+    reference: target.reference,
+    target: targetPayload,
+    workingHours,
+    timeOff,
+    blocks,
+    effective,
+  });
+  return adaptAdminScheduleView(payload, target.scope, target.reference);
+}
+
 export async function fetchAdminScheduleDetail(
   scope: AdminScheduleScope,
   reference: string | undefined,
   signal?: AbortSignal,
 ): Promise<AdminScheduleView> {
-  const path = schedulePath(scope, reference);
-  const payload = await apiClient<unknown>(path, { method: "GET", signal });
-  const view = adaptAdminScheduleView(payload, scope, reference);
+  const target = targetOf(scope, reference);
+  const view = target
+    ? await fetchTargetSchedule(target, signal)
+    : adaptAdminScheduleView(
+        await apiClient<unknown>(schedulePath(scope, reference), { method: "GET", signal }),
+        scope,
+        reference,
+      );
   if (!view) {
     throw new ApiError({
       status: 404,
@@ -117,6 +184,13 @@ export async function updateAdminScheduleWeekly(
   previewVersion?: string,
   signal?: AbortSignal,
 ): Promise<AdminScheduleMutationResult> {
+  if (targetOf(scope, reference)) {
+    throw new ApiError({
+      status: 409,
+      code: "SCHEDULE_WEEKLY_READ_ONLY",
+      message: "ویرایش ساعات هفتگی این مورد از این صفحه پشتیبانی نمی‌شود.",
+    });
+  }
   const path = schedulePath(scope, reference);
   const payload = await apiClient<unknown>(path, {
     method: "PUT",
@@ -176,6 +250,25 @@ export async function createAdminScheduleTimeOff(
   previewVersion?: string,
   signal?: AbortSignal,
 ): Promise<AdminScheduleTimeOffItem> {
+  const target = targetOf(scope, reference);
+  if (target) {
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    const created = await apiClient<unknown>(`${target.base}/time-off`, {
+      method: "POST",
+      signal,
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: { ...targetRangeBody(body), reason: reason || null, is_full_day: true },
+    });
+    const item = adaptTargetTimeOff(unwrapPayload(created), target.scope, target.reference);
+    if (!item) {
+      throw new ApiError({
+        status: 422,
+        code: "ADMIN_SCHEDULE_TIME_OFF_INVALID",
+        message: "پاسخ ثبت مرخصی معتبر نیست.",
+      });
+    }
+    return item;
+  }
   const path = `${schedulePath(scope, reference)}/time-off`;
   const payload = await apiClient<unknown>(path, {
     method: "POST",
@@ -203,6 +296,15 @@ export async function deleteAdminScheduleTimeOff(
   previewVersion?: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  const target = targetOf(scope, reference);
+  if (target) {
+    await apiClient<unknown>(`${target.base}/time-off/${encodeURIComponent(timeOffId)}`, {
+      method: "DELETE",
+      signal,
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+    return;
+  }
   const path = `${schedulePath(scope, reference)}/time-off/${encodeURIComponent(timeOffId)}`;
   await apiClient<unknown>(path, {
     method: "DELETE",
@@ -220,6 +322,26 @@ export async function createAdminScheduleBlock(
   previewVersion?: string,
   signal?: AbortSignal,
 ): Promise<AdminScheduleBlockItem> {
+  const target = targetOf(scope, reference);
+  if (target) {
+    const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+    if (!reason) throw invalidRange("دلیل مسدودی را وارد کنید.");
+    const created = await apiClient<unknown>(`${target.base}/blocked-times`, {
+      method: "POST",
+      signal,
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: { ...targetRangeBody(body), reason },
+    });
+    const item = adaptTargetBlock(unwrapPayload(created), target.scope, target.reference);
+    if (!item) {
+      throw new ApiError({
+        status: 422,
+        code: "ADMIN_SCHEDULE_BLOCK_INVALID",
+        message: "پاسخ ثبت مسدودی معتبر نیست.",
+      });
+    }
+    return item;
+  }
   const path = `${schedulePath(scope, reference)}/blocks`;
   const payload = await apiClient<unknown>(path, {
     method: "POST",
@@ -247,6 +369,20 @@ export async function deleteAdminScheduleBlock(
   previewVersion?: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  const target = targetOf(scope, reference);
+  if (target) {
+    /** Release keeps the block in history; hard delete is reserved for mistakes. */
+    await apiClient<unknown>(
+      `${target.base}/blocked-times/${encodeURIComponent(blockId)}/release`,
+      {
+        method: "POST",
+        signal,
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: {},
+      },
+    );
+    return;
+  }
   const path = `${schedulePath(scope, reference)}/blocks/${encodeURIComponent(blockId)}`;
   await apiClient<unknown>(path, {
     method: "DELETE",

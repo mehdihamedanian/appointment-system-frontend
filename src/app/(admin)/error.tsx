@@ -14,6 +14,7 @@ export default function AdminError({
       title="خطا در پنل مدیریت"
       onRetry={reset}
       detail={error.digest ?? error.message}
+      reference={error.digest}
     />
   );
 }

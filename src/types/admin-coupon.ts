@@ -195,6 +195,8 @@ export type AdminCouponFormInput = {
   serviceIds: string[];
   branchIds: string[];
   draft: boolean;
+  /** IANA timezone the validity wall times are entered in; not sent as a field. */
+  timeZone?: string;
 };
 
 export type AdminCouponFormErrors = Partial<

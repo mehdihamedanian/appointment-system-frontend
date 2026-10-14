@@ -281,7 +281,7 @@ export function SlotHoldScreen({ reference }: { reference: string }) {
 
   if (uiState === "loading-existing-hold") {
     return (
-      <div className="slot-hold" aria-busy="true" aria-label="در حال بررسی رزرو موقت">
+      <div className="slot-hold" role="status" aria-busy="true" aria-label="در حال بررسی رزرو موقت">
         <Skeleton variant="card" />
         <Skeleton variant="line" />
       </div>

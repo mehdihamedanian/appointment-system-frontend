@@ -92,6 +92,10 @@ export function CustomerRegisterForm() {
         await completeAuth(result.user);
         return;
       }
+      if (result.signInRequired) {
+        router.push(routes.auth.login);
+        return;
+      }
 
       const challenge =
         result.challenge ??

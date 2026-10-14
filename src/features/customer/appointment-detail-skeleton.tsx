@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/feedback/loading-states";
 
 export function AppointmentDetailSkeleton() {
   return (
-    <div className="appointment-detail" aria-busy="true" aria-label="در حال بارگذاری جزئیات نوبت">
+    <div className="appointment-detail" role="status" aria-busy="true" aria-label="در حال بارگذاری جزئیات نوبت">
       <Skeleton variant="line" />
       <div className="appointment-detail__layout">
         <div className="appointment-detail__main">
